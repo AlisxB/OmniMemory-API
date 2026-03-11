@@ -86,6 +86,7 @@ class MessageBufferService:
                         "channel": str(user_channel),
                         "full_content": str(full_content),
                         "fullcontent": str(full_content),
+                        "content": str(full_content), # Alias para compatibilidade
                         "metadata": metadata,
                     },
                 )

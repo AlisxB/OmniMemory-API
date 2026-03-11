@@ -116,6 +116,7 @@ class WebhookWorker:
                     full_payload.update(payload)
                 
                 body = json.dumps(full_payload)
+                logger.info(f"WebhookWorker: Executando POST para {wh.url} | Payload: {body}")
 
                 for wh in webhooks:
                     # 1. Filtrar por eventos subscritos
