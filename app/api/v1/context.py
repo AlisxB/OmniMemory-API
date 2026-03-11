@@ -313,12 +313,13 @@ async def post_message(
                 tenant_id,
                 "message.created",
                 {
-                    "session_id": session_id,
-                    "tenant_id": tenant_id,
-                    "external_user_id": external_user_id,
-                    "channel": user_channel,
+                    "session_id": str(session_id),
+                    "sessionid": str(session_id),
+                    "tenant_id": str(tenant_id),
+                    "external_user_id": str(external_user_id),
+                    "channel": str(user_channel),
                     "role": str(req.role),
-                    "content": req.content,
+                    "content": str(req.content),
                 },
             )
 

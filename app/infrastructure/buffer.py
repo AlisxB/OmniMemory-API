@@ -79,11 +79,13 @@ class MessageBufferService:
                     tenant_id,
                     "session.ready",
                     {
-                        "session_id": session_id,
-                        "tenant_id": tenant_id,
-                        "external_user_id": ext_user_id,
-                        "channel": user_channel,
-                        "full_content": full_content,
+                        "session_id": str(session_id),
+                        "sessionid": str(session_id),
+                        "tenant_id": str(tenant_id),
+                        "external_user_id": str(ext_user_id),
+                        "channel": str(user_channel),
+                        "full_content": str(full_content),
+                        "fullcontent": str(full_content),
                         "metadata": metadata,
                     },
                 )
