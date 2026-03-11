@@ -41,36 +41,28 @@ class WebhookWorker:
     @staticmethod
     async def process_queue():
         """Loop infinito que processa jobs da fila de webhooks."""
-        from ..config import settings as _settings
+        from ..redis import get_redis
         logger.info("WebhookWorker: Iniciando loop de processamento...")
 
         while True:
-            worker_redis = None
             try:
-                import redis.asyncio as aioredis
-                worker_redis = aioredis.from_url(
-                    _settings.redis_url,
-                    encoding="utf-8",
-                    decode_responses=True,
-                    max_connections=2,
-                )
-                
-                # Ping para testar conexão logo no início
-                await worker_redis.ping()
-                logger.info("WebhookWorker: Conectado ao Redis com sucesso")
+                r = await get_redis()
+                # Ping para testar conexão
+                await r.ping()
+                logger.info("WebhookWorker: Status Redis OK")
 
                 while True:
                     try:
-                        # BLPOP bloqueia até ter item na fila
-                        item = await worker_redis.blpop(WEBHOOK_QUEUE_KEY, timeout=5)
+                        # BLPOP bloqueia até ter item na fila (timeout=5 para checar cancelamento)
+                        item = await r.blpop(WEBHOOK_QUEUE_KEY, timeout=5)
                         if not item:
                             continue
                         
                         _, raw = item
                         job = json.loads(raw)
-                        logger.debug(f"WebhookWorker: Job retirado da fila: {job.get('event')}")
+                        logger.info(f"WebhookWorker: Processando evento {job.get('event')}")
                         
-                        # Processamento não-bloqueante (fire and forget task para permitir processar o próximo)
+                        # Dispara o job
                         asyncio.create_task(WebhookWorker._dispatch_job(job))
                         
                     except asyncio.CancelledError:
@@ -82,14 +74,8 @@ class WebhookWorker:
             except asyncio.CancelledError:
                 break
             except Exception as e:
-                logger.error(f"WebhookWorker Redis connection error: {e} — reconectando em 5s")
+                logger.error(f"WebhookWorker Connection/Auth Error: {e} — tentando novamente em 5s")
                 await asyncio.sleep(5)
-            finally:
-                if worker_redis:
-                    try:
-                        await worker_redis.aclose()
-                    except Exception:
-                        pass
 
     @staticmethod
     async def _dispatch_job(job: dict):
