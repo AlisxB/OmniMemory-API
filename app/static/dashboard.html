@@ -210,6 +210,10 @@
                                     <input type="number" id="ct-ttl" value="30">
                                 </div>
                                 <div class="form-field">
+                                    <label>Janela de Buffer (segundos)</label>
+                                    <input type="number" id="ct-buffer" value="0" title="0 para desativar">
+                                </div>
+                                <div class="form-field">
                                     <label>Expiração da Conta (opcional)</label>
                                     <input type="date" id="ct-expires">
                                 </div>
@@ -270,6 +274,12 @@
             <div class="form-field" style="margin-bottom:16px">
                 <label>URL do Webhook (HTTPS recomendado)</label>
                 <input id="wh-url" type="url" placeholder="https://seu-servidor.com/webhook"
+                    style="background:rgba(255,255,255,.05);border:1px solid var(--border);border-radius:8px;padding:10px 12px;color:var(--text);font-size:13px;outline:none;width:100%"
+                    onkeydown="if(event.key==='Enter')saveWebhook()">
+            </div>
+            <div class="form-field" style="margin-bottom:16px">
+                <label>Janela de Buffer (segundos)</label>
+                <input id="wh-buffer" type="number" placeholder="0 = desativado"
                     style="background:rgba(255,255,255,.05);border:1px solid var(--border);border-radius:8px;padding:10px 12px;color:var(--text);font-size:13px;outline:none;width:100%"
                     onkeydown="if(event.key==='Enter')saveWebhook()">
             </div>

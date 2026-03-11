@@ -116,9 +116,10 @@ class WebhookWorker:
                     full_payload.update(payload)
                 
                 body = json.dumps(full_payload)
-                logger.info(f"WebhookWorker: Executando POST para {wh.url} | Payload: {body}")
-
                 for wh in webhooks:
+                    # Log de auditoria para cada destino
+                    logger.info(f"WebhookWorker: Preparando envio para {wh.url} | Evento: {event} | Payload: {body}")
+                    
                     # 1. Filtrar por eventos subscritos
                     if wh.events != ["*"] and event not in wh.events:
                         logger.debug(f"WebhookWorker: Evento {event} ignorado por filtro para {wh.url}")

@@ -288,6 +288,11 @@ function openWebhookModal(tenantId, isConfigured) {
         ? '✅ Webhook ativo para este tenant — para atualizar, insira nova URL'
         : '⚪ Nenhum webhook configurado ainda';
     document.getElementById('wh-status').style.color = isConfigured ? 'var(--success)' : 'var(--muted)';
+
+    // Buscar valor atual do buffer
+    const tenant = tenantsData.find(t => t.id === tenantId);
+    document.getElementById('wh-buffer').value = tenant?.settings?.buffer_window_seconds || 0;
+
     document.getElementById('wh-error').textContent = '';
     document.getElementById('wh-modal').style.display = 'flex';
 }
@@ -299,16 +304,27 @@ function closeWebhookModal() {
 
 async function saveWebhook() {
     const url = document.getElementById('wh-url').value.trim();
+    const buffer = parseInt(document.getElementById('wh-buffer').value) || 0;
     if (!url) { document.getElementById('wh-error').textContent = 'URL é obrigatória.'; return; }
     if (!url.startsWith('http')) { document.getElementById('wh-error').textContent = 'URL deve começar com http:// ou https://'; return; }
     const btn = document.getElementById('wh-save-btn');
     btn.disabled = true; btn.textContent = 'Salvando...';
     try {
+        // 1. Sincronizar URL do Webhook
         await api(`/admin/api/tenants/${_webhookTenantId}/webhooks/sync`, {
             method: 'POST',
             body: JSON.stringify({ url })
         });
-        toast(`Webhook configurado para ${_webhookTenantId}`, 'success');
+
+        // 2. Sincronizar Buffer Window
+        await api(`/admin/api/tenants/${_webhookTenantId}`, {
+            method: 'PATCH',
+            body: JSON.stringify({
+                settings: { buffer_window_seconds: buffer }
+            })
+        });
+
+        toast(`Configurações salvas para ${_webhookTenantId}`, 'success');
         closeWebhookModal();
         await loadTenants();
     } catch (e) {
@@ -324,6 +340,7 @@ async function createTenant() {
     const rpm = parseInt(document.getElementById('ct-rpm').value) || 60;
     const tokens = parseInt(document.getElementById('ct-tokens').value) || 100000;
     const ttl = parseInt(document.getElementById('ct-ttl').value) || 30;
+    const buffer = parseInt(document.getElementById('ct-buffer').value) || 0;
     const expires = document.getElementById('ct-expires').value;
     if (!id || !name) { toast('ID e Nome são obrigatórios', 'warn'); return; }
     const btn = document.getElementById('ct-btn'); btn.disabled = true; btn.textContent = 'Criando...';
@@ -333,7 +350,12 @@ async function createTenant() {
             body: JSON.stringify({
                 id, name,
                 subscription_expires_at: expires ? expires + 'T00:00:00Z' : null,
-                settings: { rate_limit_rpm: rpm, daily_token_limit: tokens, session_ttl_minutes: ttl }
+                settings: {
+                    rate_limit_rpm: rpm,
+                    daily_token_limit: tokens,
+                    session_ttl_minutes: ttl,
+                    buffer_window_seconds: buffer
+                }
             })
         });
         showApiKeyModal(data.api_key, 'Tenant Criado com Sucesso!');
