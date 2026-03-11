@@ -1,0 +1,84 @@
+services:
+  api:
+    build:
+      context: .
+      target: runtime
+    container_name: omnimemory-api
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    volumes:
+      - ./app:/app/app         # Hot-reload em desenvolvimento
+      - ./recordings:/app/recordings
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - omnimemory-net
+
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: omnimemory-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: omnimemory
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d omnimemory"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - omnimemory-net
+
+  redis:
+    image: redis:7-alpine
+    container_name: omnimemory-redis
+    restart: unless-stopped
+    command: >
+      redis-server
+      --appendonly yes
+      --maxmemory 256mb
+      --maxmemory-policy allkeys-lru
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - omnimemory-net
+
+  n8n:
+    image: n8nio/n8n:latest
+    container_name: omnimemory-n8n
+    restart: unless-stopped
+    ports:
+      - "5678:5678"
+    environment:
+      - N8N_HOST=n8n
+      - N8N_PORT=5678
+    volumes:
+      - n8n_data:/home/node/.n8n
+    depends_on:
+      - api
+    networks:
+      - omnimemory-net
+
+volumes:
+  postgres_data:
+  redis_data:
+  n8n_data:
+
+networks:
+  omnimemory-net:
+    driver: bridge

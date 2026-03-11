@@ -1,0 +1,70 @@
+# ────────────────────────────────────────────────────────────
+# Arquivos Python e cache
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg
+*.egg-info/
+dist/
+build/
+*.so
+
+# ── Ambientes Virtuais ──────────────────────────────────────
+.venv/
+venv/
+env/
+.debug_venv/
+
+# ── Envs e Segredos ────────────────────────────────────────
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+
+# ── IDEs ───────────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+
+# ── Logs ───────────────────────────────────────────────────
+*.log
+logs/
+
+# ── Docker ─────────────────────────────────────────────────
+.docker/
+
+# ── Banco / Redis ──────────────────────────────────────────
+*.sqlite3
+*.db
+dump.rdb
+
+# ── Recordings (áudio temp) ────────────────────────────────
+recordings/
+*.mp3
+*.ogg
+*.wav
+*.webm
+
+# ── Testes ─────────────────────────────────────────────────
+.pytest_cache/
+.coverage
+htmlcov/
+coverage.xml
+
+# ── Mypy ───────────────────────────────────────────────────
+.mypy_cache/
+
+# ── Alembic ────────────────────────────────────────────────
+# NÃO ignorar: alembic/versions/*.py são migrations versionadas
+
+# ── Contexto AI ────────────────────────────────────────────
+.context/
+
+# GitHub Actions
+.github/
+
