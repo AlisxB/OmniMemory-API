@@ -20,7 +20,7 @@ class Settings(BaseSettings):
     secret_key: str  # OBRIGATÓRIO — levanta ValueError se ausente
 
     # ─── Banco de Dados ─────────────────────────────────────────────────────────
-    database_url: str = "postgresql://postgres:postgres@db:5432/omnimemory"
+    database_url: str = "postgresql://postgres:postgres@postgres:5432/omnimemory"
 
     # ─── Redis ──────────────────────────────────────────────────────────────────
     redis_host: str = "redis"

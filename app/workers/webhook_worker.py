@@ -23,26 +23,27 @@ class WebhookWorker:
     @staticmethod
     async def enqueue(tenant_id: str, event: str, payload: dict):
         """Adiciona um evento à fila de webhooks no Redis."""
-        from ..redis import get_redis
-        r = await get_redis()
-        job = json.dumps({
-            "tenant_id": tenant_id,
-            "event": event,
-            "payload": payload,
-            "attempts": 0,
-            "created_at": time.time(),
-        })
-        await r.rpush(WEBHOOK_QUEUE_KEY, job)
-        logger.debug(f"Webhook enqueued: event={event} tenant={tenant_id}")
+        try:
+            from ..redis import get_redis
+            r = await get_redis()
+            job = json.dumps({
+                "tenant_id": tenant_id,
+                "event": event,
+                "payload": payload,
+                "attempts": 0,
+                "created_at": time.time(),
+            })
+            await r.rpush(WEBHOOK_QUEUE_KEY, job)
+            logger.info(f"Webhook enqueued: event={event} tenant={tenant_id}")
+        except Exception as e:
+            logger.error(f"Failed to enqueue webhook: {e}")
 
     @staticmethod
     async def process_queue():
         """Loop infinito que processa jobs da fila de webhooks."""
         from ..config import settings as _settings
-        logger.info("WebhookWorker: processando fila...")
+        logger.info("WebhookWorker: Iniciando loop de processamento...")
 
-        # Conexão dedicada para BLPOP — separada do pool principal da API
-        # BLPOP mantém a conexão bloqueada, o que conflitaria com o pool
         while True:
             worker_redis = None
             try:
@@ -53,7 +54,10 @@ class WebhookWorker:
                     decode_responses=True,
                     max_connections=2,
                 )
-                logger.info("WebhookWorker: conectado ao Redis")
+                
+                # Ping para testar conexão logo no início
+                await worker_redis.ping()
+                logger.info("WebhookWorker: Conectado ao Redis com sucesso")
 
                 while True:
                     try:
@@ -61,13 +65,18 @@ class WebhookWorker:
                         item = await worker_redis.blpop(WEBHOOK_QUEUE_KEY, timeout=5)
                         if not item:
                             continue
+                        
                         _, raw = item
                         job = json.loads(raw)
-                        await WebhookWorker._dispatch_job(job)
+                        logger.debug(f"WebhookWorker: Job retirado da fila: {job.get('event')}")
+                        
+                        # Processamento não-bloqueante (fire and forget task para permitir processar o próximo)
+                        asyncio.create_task(WebhookWorker._dispatch_job(job))
+                        
                     except asyncio.CancelledError:
                         return
                     except Exception as e:
-                        logger.error(f"WebhookWorker job error: {e}", exc_info=True)
+                        logger.error(f"WebhookWorker Loop Error: {e}", exc_info=True)
                         await asyncio.sleep(1)
 
             except asyncio.CancelledError:
@@ -88,56 +97,74 @@ class WebhookWorker:
         from ..redis import get_redis
         from sqlalchemy.future import select
 
-        tenant_id = job["tenant_id"]
-        event = job["event"]
-        payload = job["payload"]
+        tenant_id = job.get("tenant_id")
+        event = job.get("event")
+        payload = job.get("payload")
         attempts = job.get("attempts", 0)
 
-        async with AsyncSessionLocal() as db:
-            stmt = select(WebhookSubscription).filter(
-                WebhookSubscription.tenant_id == tenant_id,
-                WebhookSubscription.is_active == True,
-            )
-            webhooks = (await db.execute(stmt)).scalars().all()
+        if not tenant_id or not event:
+            logger.error(f"WebhookWorker: Job inválido ignorado: {job}")
+            return
 
-            full_payload = {
-                "event": event,
-                "tenant_id": tenant_id,
-                "data": payload,
-                "timestamp": time.time(),
-            }
-            body = json.dumps(full_payload)
+        try:
+            async with AsyncSessionLocal() as db:
+                stmt = select(WebhookSubscription).filter(
+                    WebhookSubscription.tenant_id == tenant_id,
+                    WebhookSubscription.is_active == True,
+                )
+                webhooks = (await db.execute(stmt)).scalars().all()
 
-            for wh in webhooks:
-                # Filtrar por eventos subscritos
-                if wh.events != ["*"] and event not in wh.events:
-                    continue
+                if not webhooks:
+                    logger.debug(f"WebhookWorker: Nenhum webhook ativo para tenant {tenant_id}")
+                    return
 
-                # Assinatura HMAC-SHA256
-                signature = HMACSigner.sign(wh.secret, body)
+                full_payload = {
+                    "event": event,
+                    "tenant_id": tenant_id,
+                    "data": payload,
+                    "timestamp": time.time(),
+                }
+                body = json.dumps(full_payload)
 
-                try:
-                    async with httpx.AsyncClient(timeout=10.0) as client:
-                        resp = await client.post(
-                            wh.url,
-                            content=body,
-                            headers={
-                                "Content-Type": "application/json",
-                                "X-OmniMemory-Signature": f"sha256={signature}",
-                                "X-OmniMemory-Event": event,
-                            },
-                        )
-                        if resp.status_code >= 400:
-                            raise httpx.HTTPStatusError(
-                                f"HTTP {resp.status_code}", request=resp.request, response=resp
+                for wh in webhooks:
+                    # 1. Filtrar por eventos subscritos
+                    if wh.events != ["*"] and event not in wh.events:
+                        logger.debug(f"WebhookWorker: Evento {event} ignorado por filtro para {wh.url}")
+                        continue
+
+                    # 2. Assinatura HMAC-SHA256
+                    signature = HMACSigner.sign(wh.secret, body)
+
+                    # 3. Enviar
+                    logger.info(f"WebhookWorker: Enviando {event} para {wh.url} (Tentativa {attempts+1})")
+                    try:
+                        async with httpx.AsyncClient(timeout=10.0, verify=False) as client:
+                            resp = await client.post(
+                                wh.url,
+                                content=body,
+                                headers={
+                                    "Content-Type": "application/json",
+                                    "X-OmniMemory-Signature": f"sha256={signature}",
+                                    "X-OmniMemory-Event": event,
+                                    "User-Agent": "OmniMemory-Webhook/2.0",
+                                },
                             )
-                        logger.info(f"Webhook dispatched: event={event} url={wh.url} status={resp.status_code}")
-                except Exception as e:
-                    logger.warning(f"Webhook failed: event={event} url={wh.url} attempt={attempts+1} error={e}")
-                    if attempts < MAX_RETRIES:
-                        # Recolocar na fila com delay
-                        r = await get_redis()
-                        delay = RETRY_DELAYS[min(attempts, len(RETRY_DELAYS) - 1)]
-                        job["attempts"] = attempts + 1
-                        await asyncio.sleep(delay)
-                        await r.rpush(WEBHOOK_QUEUE_KEY, json.dumps(job))
+                            resp.raise_for_status()
+                            logger.info(f"Webhook SUCCESS: event={event} url={wh.url} status={resp.status_code}")
+                    except Exception as e:
+                        logger.warning(f"Webhook FAILED: event={event} url={wh.url} attempt={attempts+1} error={e}")
+                        
+                        if attempts < MAX_RETRIES:
+                            # Re-encfileiramento com delay
+                            delay = RETRY_DELAYS[min(attempts, len(RETRY_DELAYS) - 1)]
+                            logger.info(f"Webhook: Agendando retry em {delay}s para {wh.url}")
+                            
+                            await asyncio.sleep(delay)
+                            job["attempts"] = attempts + 1
+                            r = await get_redis()
+                            await r.rpush(WEBHOOK_QUEUE_KEY, json.dumps(job))
+                        else:
+                            logger.error(f"Webhook DEAD: event={event} url={wh.url} após {attempts+1} tentativas")
+
+        except Exception as e:
+            logger.error(f"Critical error in _dispatch_job: {e}", exc_info=True)
