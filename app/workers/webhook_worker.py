@@ -104,12 +104,17 @@ class WebhookWorker:
                     logger.debug(f"WebhookWorker: Nenhum webhook ativo para tenant {tenant_id}")
                     return
 
+                # Payload final: chaves na raiz + chaves dentro de 'data' para compatibilidade total
                 full_payload = {
                     "event": event,
                     "tenant_id": tenant_id,
-                    "data": payload,
                     "timestamp": time.time(),
+                    "data": payload,  # Mantém estrutura antiga
                 }
+                # Adiciona todas as chaves do payload original na raiz
+                if isinstance(payload, dict):
+                    full_payload.update(payload)
+                
                 body = json.dumps(full_payload)
 
                 for wh in webhooks:
