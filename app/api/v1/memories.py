@@ -25,8 +25,9 @@ router = APIRouter(tags=["v1 — memories"])
 
 class MemoryCreate(BaseModel):
     tenant_id: str
-    user_id: Optional[int] = None
-    scope: MemoryScope
+    external_user_id: Optional[str] = Field(None, description="ID externo (celular, e-mail)")
+    user_id: Optional[int] = Field(None, description="ID interno (opcional)")
+    scope: MemoryScope = Field(default=MemoryScope.user)
     key: str = Field(..., min_length=1, max_length=100)
     value: str = Field(..., min_length=1)
     expires_at: Optional[datetime] = None
@@ -39,13 +40,34 @@ async def save_memory(
     req: MemoryCreate,
     db: AsyncSession = Depends(get_db),
 ):
-    """Salva um fato sobre o usuário. Se a chave já existir, atualiza."""
+    """
+    Salva um fato sobre o usuário. Se a chave já existir, atualiza.
+    Suporta external_user_id para facilidade de integração.
+    """
     await validate_tenant_access(req.tenant_id, request.headers.get("X-API-Key"), db)
 
+    # 1. Resolver UserID interno se external_user_id for fornecido
+    memo_user_id = req.user_id
+    if req.external_user_id and not memo_user_id:
+        from ...domain.users.model import User
+        # Buscar usuário pelo ID externo
+        res_user = (await db.execute(
+            select(User).filter(User.external_id == req.external_user_id, User.tenant_id == req.tenant_id)
+        )).scalars().first()
+        
+        if not res_user:
+            # Se não existir, criar um usuário básico para ancorar a memória
+            res_user = User(tenant_id=req.tenant_id, external_id=req.external_user_id, channel="api")
+            db.add(res_user)
+            await db.flush()
+        
+        memo_user_id = res_user.id
+
+    # 2. Buscar memória existente para atualização (Upsert)
     existing = (await db.execute(
         select(Memory).filter(
             Memory.tenant_id == req.tenant_id,
-            Memory.user_id == req.user_id,
+            Memory.user_id == memo_user_id,
             Memory.key == req.key,
         )
     )).scalars().first()
@@ -62,7 +84,7 @@ async def save_memory(
     else:
         db_memory = Memory(
             tenant_id=req.tenant_id,
-            user_id=req.user_id,
+            user_id=memo_user_id,
             scope=req.scope,
             key=req.key,
             value=encrypted,
@@ -74,13 +96,19 @@ async def save_memory(
     await db.commit()
     await db.refresh(db_memory)
 
-    # Invalidar cache + disparar webhook
-    if req.user_id:
-        await invalidate_user_memories(req.tenant_id, req.user_id)
+    # 3. Invalidar cache + disparar webhook
+    if memo_user_id:
+        await invalidate_user_memories(req.tenant_id, memo_user_id)
+    
     await WebhookWorker.enqueue(
         req.tenant_id,
         "memory.updated",
-        {"user_id": req.user_id, "key": req.key, "scope": str(req.scope)},
+        {
+            "external_user_id": req.external_user_id,
+            "user_id": memo_user_id, 
+            "key": req.key, 
+            "scope": str(req.scope)
+        },
     )
 
     return wrap_response(
