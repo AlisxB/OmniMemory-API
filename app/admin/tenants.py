@@ -11,7 +11,9 @@ from pydantic import BaseModel, Field
 from sqlalchemy import func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
-from sqlalchemy.orm import selectinload
+from sqlalchemy.orm import selectinload, Session as OrmSession
+from ..domain.messages.model import Message # Adicionado para estatísticas
+from ..domain.sessions.model import Session # Adicionado para estatísticas
 
 from ..database import get_db
 from ..core.responses import wrap_response
@@ -83,23 +85,32 @@ async def list_tenants(
             key_age_days = delta.days
             key_needs_rotation = key_age_days > 90
 
+        # Buscar uso acumulado no banco de dados
+        # Nota: requests aqui são contadas como mensagens no banco
+        db_stats = (await db.execute(
+            select(
+                func.count(Message.id).label("msgs"),
+                func.sum(Message.tokens_used).label("tokens")
+            )
+            .join(Session)
+            .filter(Session.tenant_id == t.id)
+        )).first()
+
         tenant_list.append({
             "id": t.id,
             "name": t.name,
             "is_active": t.is_active,
             "created_at": t.created_at,
             "subscription_expires_at": t.subscription_expires_at,
-            "usage": usage,
+            "usage": usage, # Hoje (Redis)
+            "total_usage": {
+                "tokens": int(db_stats.tokens or 0) if db_stats else 0,
+                "requests": int(db_stats.msgs or 0) if db_stats else 0,
+            },
             "api_key_info": {
                 "suffix": t.api_key[-8:] if t.api_key else None,
                 "age_days": key_age_days,
                 "needs_rotation": key_needs_rotation,
-            },
-            "webhook_configured": len(t.webhooks) > 0 if t.webhooks else False,
-            "settings": {
-                "rate_limit_rpm": t.settings.rate_limit_rpm if t.settings else 60,
-                "daily_token_limit": t.settings.daily_token_limit if t.settings else 100_000,
-                "buffer_window_seconds": t.settings.buffer_window_seconds if t.settings else 0,
             },
             "webhook_configured": bool(t.webhooks and any(w.is_active for w in t.webhooks)),
             "webhooks": [

@@ -169,7 +169,8 @@ function renderTenants(filter = '') {
       <td>${keyAgeBadge(t.api_key_info)}</td>
       <td style="color:var(--muted);font-size:12px">${expires}</td>
       <td style="font-size:12px">
-        <div>${t.usage?.requests ?? 0} req / ${fmtNum(t.usage?.tokens ?? 0)} tokens</div>
+        <div title="Uso de hoje (baseado em cache)">📅 ${t.usage?.requests ?? 0} req / ${fmtNum(t.usage?.tokens ?? 0)} tokens</div>
+        <div title="Uso total acumulado no banco" style="color:var(--muted); font-size:11px">📊 ${t.total_usage?.requests ?? 0} req / ${fmtNum(t.total_usage?.tokens ?? 0)} tokens</div>
         ${whUrl}
       </td>
       <td>
