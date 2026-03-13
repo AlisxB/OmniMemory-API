@@ -115,3 +115,53 @@ async def get_tenant_distribution(
         },
         getattr(request.state, "request_id", None)
     )
+@router.get("/tenants/{tenant_id}", summary="Analytics detalhado de um tenant")
+async def get_tenant_analytics(
+    request: Request,
+    tenant_id: str,
+    db: AsyncSession = Depends(get_db),
+    _: dict = Depends(get_current_admin),
+):
+    """
+    Retorna métricas agregadas de um tenant específico para o administrador.
+    Mesma lógica do v1, mas autenticado via admin JWT.
+    """
+    from ..domain.sessions.model import Session
+    from ..domain.users.model import User
+    from ..domain.messages.model import Message
+
+    total_sessions = (await db.execute(
+        select(func.count(Session.id)).filter(Session.tenant_id == tenant_id)
+    )).scalar_one()
+
+    total_users = (await db.execute(
+        select(func.count(User.id)).filter(User.tenant_id == tenant_id)
+    )).scalar_one()
+
+    total_messages = (await db.execute(
+        select(func.count(Message.id)).join(Session).filter(Session.tenant_id == tenant_id)
+    )).scalar_one()
+
+    avg_messages = total_messages / total_sessions if total_sessions > 0 else 0
+
+    status_result = await db.execute(
+        select(Session.status, func.count(Session.id))
+        .filter(Session.tenant_id == tenant_id)
+        .group_by(Session.status)
+    )
+
+    daily_usage = await RedisManager.get_daily_usage(tenant_id)
+
+    return wrap_response(
+        {
+            "summary": {
+                "total_sessions": total_sessions,
+                "total_users": total_users,
+                "total_messages": total_messages,
+                "avg_messages_per_session": round(avg_messages, 2),
+            },
+            "session_status": {s.value: c for s, c in status_result.all()},
+            "today": daily_usage,
+        },
+        getattr(request.state, "request_id", None),
+    )

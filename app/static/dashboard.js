@@ -415,9 +415,7 @@ async function loadTenantAnalytics() {
     const tid = document.getElementById('analytics-tenant-select').value;
     if (!tid) { document.getElementById('analytics-content').style.display = 'none'; return; }
     try {
-        const d = await api(`/v1/tenants/${tid}/analytics`, {
-            headers: { 'Authorization': 'Bearer ' + ACCESS_TOKEN }
-        });
+        const d = await api(`/admin/api/analytics/tenants/${tid}`);
         document.getElementById('analytics-content').style.display = 'block';
         const stats = document.getElementById('analytics-stats');
         const s = d.summary || {};
