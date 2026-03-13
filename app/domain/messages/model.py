@@ -27,6 +27,10 @@ class Message(Base):
     raw_payload = Column(JSON, default=dict)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     embedding = Column(Vector(768), nullable=True)  # Gemini text-embedding-004
+    
+    # Tracking de Uso (n8n / Workflow)
+    execution_id = Column(String(255), nullable=True, index=True)
+    tokens_used = Column(Integer, server_default="0", nullable=False)
 
     # Relacionamentos
     session = relationship("Session", back_populates="messages")

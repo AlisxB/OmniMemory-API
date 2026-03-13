@@ -59,6 +59,10 @@ class MessageCreate(BaseModel):
     tenant_id: Optional[str] = None
     external_user_id: Optional[str] = None
     channel: Optional[str] = "whatsapp"
+    
+    # Tracking de Uso (n8n / Workflow)
+    execution_id: Optional[str] = Field(None, description="ID da execução no n8n")
+    tokens_used: Optional[int] = Field(0, description="Quantidade de tokens usados")
 
 
 class SearchRequest(BaseModel):
@@ -66,6 +70,12 @@ class SearchRequest(BaseModel):
     tenant_id: str = Field(..., description="ID do tenant")
     query: str = Field(..., min_length=2, max_length=512)
     limit: int = Field(default=5, ge=1, le=20)
+
+
+class MessageUsageUpdate(BaseModel):
+    """Atualização de uso de tokens para uma mensagem específica."""
+    tokens_used: int = Field(..., ge=0)
+    execution_id: Optional[str] = None
 
 
 # ─── Endpoints ────────────────────────────────────────────────────────────────
@@ -280,6 +290,8 @@ async def post_message(
         content=req.content,
         raw_payload=req.raw_payload,
         embedding=emb,
+        execution_id=req.execution_id,
+        tokens_used=req.tokens_used or 0,
     )
     db.add(db_message)
 
@@ -328,7 +340,7 @@ async def post_message(
         background_tasks.add_task(MessageBufferService.process_message, session_id, req.content, buf_window)
 
     # Registrar uso
-    await RedisManager.record_usage(tenant_id, tokens=0)
+    await RedisManager.record_usage(tenant_id, tokens=req.tokens_used or 0)
 
     return wrap_response(
         {
@@ -337,6 +349,50 @@ async def post_message(
             "role": db_message.role,
             "content": db_message.content,
             "created_at": db_message.created_at,
+            "execution_id": db_message.execution_id,
+            "tokens_used": db_message.tokens_used,
+        },
+        request.state.request_id,
+    )
+
+
+@router.patch("/context/messages/{message_id}/usage", summary="Atualizar uso de tokens da mensagem")
+async def update_message_usage(
+    request: Request,
+    message_id: int,
+    req: MessageUsageUpdate,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Atualiza o consumo de tokens de uma mensagem após a execução do workflow.
+    Útil para n8n que só sabe o total de tokens ao final da execução.
+    """
+    stmt = select(Message).filter(Message.id == message_id).options(selectinload(Message.session))
+    db_message = (await db.execute(stmt)).scalars().first()
+
+    if not db_message:
+        raise HTTPException(status_code=404, detail="Mensagem não encontrada")
+
+    tenant_id = db_message.session.tenant_id
+    await validate_tenant_access(tenant_id, request.headers.get("X-API-Key"), db)
+
+    # Calcular a diferença para atualizar o Redis corretamente
+    diff = req.tokens_used - (db_message.tokens_used or 0)
+    
+    db_message.tokens_used = req.tokens_used
+    if req.execution_id:
+        db_message.execution_id = req.execution_id
+
+    await db.commit()
+    
+    if diff != 0:
+        await RedisManager.record_usage(tenant_id, tokens=diff)
+
+    return wrap_response(
+        {
+            "id": db_message.id,
+            "tokens_used": db_message.tokens_used,
+            "execution_id": db_message.execution_id,
         },
         request.state.request_id,
     )
