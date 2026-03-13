@@ -28,6 +28,7 @@ from ...domain.memories.model import Memory
 from ...infrastructure.summarizer import SummarizerService
 from ...infrastructure.buffer import MessageBufferService
 from ..deps import validate_tenant_access
+from ...infrastructure.workflow_sync import WorkflowSyncService
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["v1 — context"])
@@ -339,6 +340,10 @@ async def post_message(
         buf_window = tenant_settings.buffer_window_seconds
         background_tasks.add_task(MessageBufferService.process_message, session_id, req.content, buf_window)
 
+    # Sincronização automática de tokens com n8n se execution_id for provido
+    if req.execution_id:
+        background_tasks.add_task(WorkflowSyncService.sync_message_tokens, db_message.id)
+
     # Registrar uso
     await RedisManager.record_usage(tenant_id, tokens=req.tokens_used or 0)
 
@@ -361,6 +366,7 @@ async def update_message_usage(
     request: Request,
     message_id: int,
     req: MessageUsageUpdate,
+    background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
 ):
     """
@@ -387,6 +393,12 @@ async def update_message_usage(
     
     if diff != 0:
         await RedisManager.record_usage(tenant_id, tokens=diff)
+
+    # Tenta sincronizar se execution_id foi provido ou atualizado
+    # e tokens_used ainda for baixo ou zero (opcional, mas garante sync)
+    target_exec_id = req.execution_id or db_message.execution_id
+    if target_exec_id:
+        background_tasks.add_task(WorkflowSyncService.sync_message_tokens, db_message.id)
 
     return wrap_response(
         {

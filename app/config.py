@@ -52,6 +52,10 @@ class Settings(BaseSettings):
     gemini_api_key: str = ""
     groq_api_key: str = ""
 
+    # ─── Sincronização de Workflows (n8n) ──────────────────────────────────────
+    n8n_url: str = ""
+    n8n_api_key: str = ""
+
     # ─── Feature Flags ──────────────────────────────────────────────────────────
     enable_embeddings: bool = True
     enable_audio: bool = True
