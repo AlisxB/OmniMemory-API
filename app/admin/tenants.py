@@ -102,6 +102,15 @@ async def list_tenants(
                 "buffer_window_seconds": t.settings.buffer_window_seconds if t.settings else 0,
             },
             "webhook_configured": bool(t.webhooks and any(w.is_active for w in t.webhooks)),
+            "webhooks": [
+                {
+                    "id": w.id,
+                    "url": w.url,
+                    "secret": w.secret,
+                    "is_active": w.is_active,
+                    "events": w.events,
+                } for w in t.webhooks
+            ] if t.webhooks else [],
         })
 
     return wrap_response(tenant_list, getattr(request.state, "request_id", None))

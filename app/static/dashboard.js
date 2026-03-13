@@ -158,6 +158,8 @@ function renderTenants(filter = '') {
     list.forEach(t => {
         const row = document.createElement('tr');
         const expires = t.subscription_expires_at ? new Date(t.subscription_expires_at).toLocaleDateString('pt-BR') : '—';
+        const whCount = t.webhooks?.length || 0;
+        const whUrl = whCount > 0 ? `<div style="font-size:10px;color:var(--muted);max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${whCount > 1 ? `🔔 ${whCount} webhooks` : t.webhooks[0].url}</div>` : '';
         row.innerHTML = `
       <td>
         <div style="font-weight:600;font-size:13px">${t.name}</div>
@@ -166,7 +168,10 @@ function renderTenants(filter = '') {
       <td>${statusBadge(t.is_active)}</td>
       <td>${keyAgeBadge(t.api_key_info)}</td>
       <td style="color:var(--muted);font-size:12px">${expires}</td>
-      <td style="font-size:12px">${t.usage?.requests ?? 0} req / ${fmtNum(t.usage?.tokens ?? 0)} tokens</td>
+      <td style="font-size:12px">
+        <div>${t.usage?.requests ?? 0} req / ${fmtNum(t.usage?.tokens ?? 0)} tokens</div>
+        ${whUrl}
+      </td>
       <td>
         <div class="flex-gap">
           <button class="btn btn-warn btn-sm btn-icon" onclick="confirmRotateKey('${t.id}')" title="Rotacionar API Key">🔑</button>
@@ -282,15 +287,43 @@ let _webhookTenantId = null;
 
 function openWebhookModal(tenantId, isConfigured) {
     _webhookTenantId = tenantId;
+    const tenant = tenantsData.find(t => t.id === tenantId);
+
     document.getElementById('wh-tenant-label').textContent = tenantId;
-    document.getElementById('wh-url').value = '';
+    document.getElementById('wh-url').value = tenant?.webhooks?.[0]?.url || '';
+
+    const container = document.getElementById('wh-list-container');
+    container.innerHTML = '';
+
+    if (tenant?.webhooks?.length > 0) {
+        tenant.webhooks.forEach(w => {
+            const div = document.createElement('div');
+            div.style.padding = '8px';
+            div.style.borderBottom = '1px solid rgba(255,255,255,0.05)';
+            div.style.display = 'flex';
+            div.style.flexDirection = 'column';
+            div.style.gap = '4px';
+            div.innerHTML = `
+                <div style="display:flex; justify-content:space-between; align-items:center">
+                    <span style="font-size:12px; font-weight:600; color:var(--text)">${w.url}</span>
+                    <span class="badge ${w.is_active ? 'badge-success' : 'badge-muted'}" style="font-size:10px">${w.is_active ? 'Ativo' : 'Inativo'}</span>
+                </div>
+                <div style="font-size:10px; color:var(--muted); cursor:pointer" onclick="copyToClipboard('${w.secret}', this)">
+                    Secret: <span class="monospace">${w.secret}</span> 📋
+                </div>
+            `;
+            container.appendChild(div);
+        });
+    } else {
+        container.innerHTML = '<div style="text-align:center; color:var(--muted); font-size:12px; padding:20px">Nenhum webhook configurado.</div>';
+    }
+
     document.getElementById('wh-status').textContent = isConfigured
-        ? '✅ Webhook ativo para este tenant — para atualizar, insira nova URL'
+        ? `✅ ${tenant?.webhooks?.length || 0} webhook(s) configurado(s)`
         : '⚪ Nenhum webhook configurado ainda';
     document.getElementById('wh-status').style.color = isConfigured ? 'var(--success)' : 'var(--muted)';
 
     // Buscar valor atual do buffer
-    const tenant = tenantsData.find(t => t.id === tenantId);
     document.getElementById('wh-buffer').value = tenant?.settings?.buffer_window_seconds || 0;
 
     document.getElementById('wh-error').textContent = '';
