@@ -12,7 +12,7 @@ class WebhookSubscription(Base):
     __tablename__ = "webhook_subscriptions"
 
     id = Column(Integer, primary_key=True, index=True)
-    tenant_id = Column(String, ForeignKey("tenants.id", ondelete="CASCADE"), index=True)
+    tenant_id = Column(String, ForeignKey("tenants.id", ondelete="CASCADE"), index=True, unique=True)
     url = Column(String, nullable=False)
     secret = Column(String, nullable=False, default=lambda: secrets.token_hex(32))
     is_active = Column(Boolean, default=True)

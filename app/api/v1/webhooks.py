@@ -41,6 +41,17 @@ async def subscribe_webhook(
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
+    # Verificar se já existe um webhook para este tenant
+    existing = (await db.execute(
+        select(WebhookSubscription).filter(WebhookSubscription.tenant_id == tenant_id)
+    )).scalars().first()
+    
+    if existing:
+        raise HTTPException(
+            status_code=400,
+            detail="Este tenant já possui um webhook registrado. Remova-o antes de registrar um novo."
+        )
+
     webhook = WebhookSubscription(tenant_id=tenant_id, url=validated_url, events=req.events, is_active=req.is_active)
     db.add(webhook)
     await db.commit()
