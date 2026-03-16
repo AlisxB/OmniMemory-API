@@ -17,8 +17,20 @@ depends_on = None
 
 
 def upgrade():
-    # Adicionar restrição de unicidade no tenant_id para webhook_subscriptions
-    # Nota: Se houver duplicatas, esta operação falhará no PostgreSQL.
+    # 1. Limpar duplicatas antes de aplicar a restrição
+    # Mantém apenas o registro mais recente (maior ID) para cada tenant
+    op.execute("""
+        DELETE FROM webhook_subscriptions
+        WHERE id IN (
+            SELECT id FROM (
+                SELECT id, ROW_NUMBER() OVER (PARTITION BY tenant_id ORDER BY id DESC) as row_num
+                FROM webhook_subscriptions
+            ) t
+            WHERE t.row_num > 1
+        )
+    """)
+
+    # 2. Adicionar restrição de unicidade
     op.create_unique_constraint('uq_webhook_subscriptions_tenant_id', 'webhook_subscriptions', ['tenant_id'])
 
 

@@ -11,6 +11,8 @@ services:
       - .env
     volumes:
       - ./app:/app/app         # Hot-reload em desenvolvimento
+      - ./alembic:/app/alembic
+      - ./alembic.ini:/app/alembic.ini
       - ./recordings:/app/recordings
     depends_on:
       postgres:
