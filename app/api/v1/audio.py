@@ -1,6 +1,7 @@
 """Endpoint de áudio — transcrição via Groq Whisper."""
 import logging
 import os
+import subprocess
 import tempfile
 from typing import Optional
 
@@ -69,16 +70,45 @@ async def process_audio(
 
         # Converter para MP3 via ffmpeg
         converted_path = temp_input_path.rsplit(".", 1)[0] + "_converted.mp3"
-        ret = os.system(f'ffmpeg -y -i "{temp_input_path}" -ar 16000 -ac 1 "{converted_path}" -loglevel quiet')
-        if ret != 0:
+        conversion_success = False
+        try:
+            # Usamos subprocess para maior segurança e controle sobre o erro
+            process = subprocess.run(
+                ["ffmpeg", "-y", "-i", temp_input_path, "-ar", "16000", "-ac", "1", converted_path, "-loglevel", "quiet"],
+                capture_output=True,
+                text=True
+            )
+            conversion_success = (process.returncode == 0)
+        except Exception as e:
+            logger.warning(f"ffmpeg conversion attempt failed: {e}")
+
+        if not conversion_success:
             converted_path = temp_input_path  # Usar original se conversão falhar
+            logger.warning("Using original audio file (conversion failed or ffmpeg not found)")
 
         # Transcrever via Groq
         from groq import AsyncGroq
         client = AsyncGroq(api_key=settings.groq_api_key)
+
+        # Garantir que o filename enviado ao Groq tenha uma extensão válida
+        # Groq exige extensões como: flac, mp3, mp4, mpeg, mpga, m4a, ogg, opus, wav, webm
+        final_filename = filename
+        allowed_extensions = {"flac", "mp3", "mp4", "mpeg", "mpga", "m4a", "ogg", "opus", "wav", "webm"}
+        
+        if conversion_success:
+            # Se converteu, forçamos .mp3 se não tiver
+            if not final_filename.lower().endswith(".mp3"):
+                final_filename = f"{os.path.splitext(final_filename)[0]}.mp3"
+        else:
+            # Se não converteu, verificamos se a extensão original é aceita
+            ext = os.path.splitext(final_filename)[1].lower().lstrip(".")
+            if ext not in allowed_extensions:
+                # Se não for aceita (ou se não houver extensão), forçamos .mp3 como fallback de nome
+                final_filename = f"{os.path.splitext(final_filename)[0]}.mp3"
+
         with open(converted_path, "rb") as audio_file:
             transcription = await client.audio.transcriptions.create(
-                file=(filename, audio_file),
+                file=(final_filename, audio_file),
                 model="whisper-large-v3",
                 language="pt",
             )
