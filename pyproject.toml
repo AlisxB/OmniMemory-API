@@ -39,6 +39,7 @@ dependencies = [
     # ── AI / Embeddings ────────────────────────────────────────────────────
     "google-generativeai==0.8.3",
     "groq==0.13.0",
+    "fastembed==0.4.2",
 
     # ── Observabilidade ────────────────────────────────────────────────────
     "sentry-sdk[fastapi]==2.19.2",

@@ -36,7 +36,7 @@ class MessageBufferService:
         last_msg_id = await RedisManager.get_last_message_id(session_id)
 
         if current_msg_id != last_msg_id:
-            logger.info(f"Buffer skip: novas mensagens chegaram para session={session_id}")
+            logger.info(f"Buffer skip: novas mensagens chegaram para session={session_id} (curr={current_msg_id}, last={last_msg_id})")
             return
 
         # 4. Silêncio detectado — agregar e disparar
@@ -46,10 +46,11 @@ class MessageBufferService:
                 from sqlalchemy.orm import selectinload
                 from ..domain.sessions.model import Session
 
+                logger.info(f"Buffer firing: window closed for session={session_id}")
                 full_content = await RedisManager.get_and_clear_buffer(session_id)
 
                 if not full_content:
-                    logger.info(f"Buffer vazio para session={session_id}")
+                    logger.info(f"Buffer cancelado: conteúdo já processado por outra task ou vazio para session={session_id}")
                     return
 
                 session_stmt = (

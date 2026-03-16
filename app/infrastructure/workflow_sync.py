@@ -1,6 +1,7 @@
 import logging
 import httpx
 import asyncio
+from sqlalchemy.future import select
 from ..database import AsyncSessionLocal
 from ..domain.messages.model import Message
 from ..redis import RedisManager
