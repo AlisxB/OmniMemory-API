@@ -326,6 +326,7 @@ async def post_message(
                 tenant_id,
                 "message.created",
                 {
+                    "message_id": db_message.id,
                     "session_id": str(session_id),
                     "sessionid": str(session_id),
                     "tenant_id": str(tenant_id),

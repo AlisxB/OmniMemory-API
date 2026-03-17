@@ -74,6 +74,16 @@ class MessageBufferService:
                     f"content_len={len(full_content)} chars"
                 )
 
+                # Buscar última mensagem do assistente para facilitar atualização de tokens
+                from ..domain.messages.model import Message, MessageRole
+                last_ast_stmt = (
+                    select(Message.id)
+                    .filter(Message.session_id == session_id, Message.role == MessageRole.assistant)
+                    .order_by(Message.created_at.desc())
+                    .limit(1)
+                )
+                last_assistant_id = (await db.execute(last_ast_stmt)).scalars().first()
+
                 # Disparar via WebhookWorker (não sincrono)
                 from ..workers.webhook_worker import WebhookWorker
                 await WebhookWorker.enqueue(
@@ -88,6 +98,7 @@ class MessageBufferService:
                         "full_content": str(full_content),
                         "fullcontent": str(full_content),
                         "content": str(full_content), # Alias para compatibilidade
+                        "last_assistant_message_id": last_assistant_id,
                         "metadata": metadata,
                     },
                 )
