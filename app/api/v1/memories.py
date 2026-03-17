@@ -100,16 +100,16 @@ async def save_memory(
     if memo_user_id:
         await invalidate_user_memories(req.tenant_id, memo_user_id)
     
-    await WebhookWorker.enqueue(
-        req.tenant_id,
-        "memory.updated",
-        {
-            "external_user_id": req.external_user_id,
-            "user_id": memo_user_id, 
-            "key": req.key, 
-            "scope": str(req.scope)
-        },
-    )
+    # await WebhookWorker.enqueue(
+    #     req.tenant_id,
+    #     "memory.updated",
+    #     {
+    #         "external_user_id": req.external_user_id,
+    #         "user_id": memo_user_id, 
+    #         "key": req.key, 
+    #         "scope": str(req.scope)
+    #     },
+    # )
 
     return wrap_response(
         {
