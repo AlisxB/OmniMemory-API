@@ -72,13 +72,20 @@ class WorkflowSyncService:
         """Busca campos comuns de tokens em um JSON arbitrário de execução."""
         total = 0
         if isinstance(data, dict):
-            # Campos comuns
-            if "total_tokens" in data: return int(data["total_tokens"])
-            if "usage" in data and isinstance(data["usage"], dict):
-                return int(data["usage"].get("total_tokens", 0))
-            if "tokens" in data and isinstance(data["tokens"], int): return data["tokens"]
+            # 1. Tentar campos diretos (snake_case e camelCase)
+            for field in ["total_tokens", "totalTokens", "tokens"]:
+                if field in data and isinstance(data[field], (int, float)):
+                    return int(data[field])
+
+            # 2. Tentar objetos de uso (usage ou tokenUsage)
+            for field in ["usage", "tokenUsage"]:
+                if field in data and isinstance(data[field], dict):
+                    inner = data[field]
+                    for inner_field in ["total_tokens", "totalTokens", "tokens"]:
+                        if inner_field in inner and isinstance(inner[inner_field], (int, float)):
+                            return int(inner[inner_field])
             
-            # Recursal
+            # 3. Recursal (busca em profundidade se não encontrou no nível atual)
             for v in data.values():
                 res = WorkflowSyncService._extract_tokens_from_json(v)
                 if res > 0: total += res
