@@ -1,0 +1,225 @@
+@import "tailwindcss";
+
+@theme {
+  --color-omni-bg: #0b0c10;
+  --color-omni-card: rgba(18, 20, 28, 0.6);
+  --color-omni-neon: #00f0ff;
+  --color-omni-cyan: #00f0ff;
+  --color-omni-purple: #b300ff;
+  --color-omni-accent: #FF007A;
+  --color-omni-success: #00ff88;
+  
+  --font-sans: var(--font-geist-sans), 'Inter', Arial, Helvetica, sans-serif;
+  --font-mono: var(--font-geist-mono);
+}
+
+:root {
+  --background: var(--color-omni-bg);
+  --foreground: #e2e8f0;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans);
+  min-height: 100vh;
+}
+
+/* Base App Layout */
+.app-container {
+  display: flex;
+  min-height: 100vh;
+  background-image: 
+    radial-gradient(circle at 15% 50%, rgba(0, 240, 255, 0.05) 0%, transparent 40%),
+    radial-gradient(circle at 85% 30%, rgba(179, 0, 255, 0.05) 0%, transparent 40%);
+}
+
+.main-content {
+  flex: 1;
+  padding: 2rem;
+  margin-left: 260px; /* Sidebar width matching image proportion */
+}
+
+/* Specific Header Colors matching mockup */
+.dash-title {
+  font-size: 1.5rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: #fff;
+  text-transform: uppercase;
+}
+
+.dash-subtitle {
+  font-size: 0.8rem;
+  color: #00f0ff;
+  opacity: 0.8;
+  font-weight: 500;
+}
+
+/* KPI numbers */
+.kpi-value {
+  font-size: 2.2rem;
+  font-weight: 600;
+  color: #fff;
+  line-height: 1;
+}
+
+.kpi-perc {
+  font-size: 0.85rem;
+  color: var(--color-omni-success);
+  margin-left: 0.5rem;
+  font-weight: 500;
+}
+
+.kpi-label {
+  font-size: 0.75rem;
+  color: rgba(255,255,255,0.6);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 0.5rem;
+}
+
+/* Data Tables */
+.omni-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 1rem;
+}
+
+.omni-table th {
+  color: rgba(255,255,255,0.5);
+  font-weight: 500;
+  font-size: 0.75rem;
+  text-align: left;
+  padding: 0.5rem 1rem;
+  border-bottom: 1px solid rgba(255,255,255,0.05);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.omni-table td {
+  padding: 0.85rem 1rem;
+  border-bottom: 1px solid rgba(255,255,255,0.03);
+  font-size: 0.85rem;
+  color: rgba(255,255,255,0.85);
+}
+
+.omni-table tr:last-child td {
+  border-bottom: none;
+}
+
+.badge-status-green {
+  border: 1px solid rgba(0, 255, 136, 0.3);
+  color: #00ff88;
+  background: rgba(0, 255, 136, 0.05);
+  font-size: 0.65rem;
+  padding: 0.15rem 0.5rem;
+  border-radius: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+/* Timeline Feed */
+.omni-timeline {
+  position: relative;
+  padding-left: 1.5rem;
+  margin-top: 1rem;
+}
+
+.omni-timeline::before {
+  content: "";
+  position: absolute;
+  left: 0.6rem;
+  top: 0.5rem;
+  bottom: 0;
+  width: 1px;
+  background: rgba(255,255,255,0.1);
+}
+
+.timeline-item {
+  position: relative;
+  margin-bottom: 1.5rem;
+}
+
+.timeline-item:last-child {
+  margin-bottom: 0;
+}
+
+.timeline-icon {
+  position: absolute;
+  left: -2.05rem;
+  top: 0;
+  width: 1.8rem;
+  height: 1.8rem;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.8rem;
+  background: var(--color-omni-bg);
+  border: 1px solid currentColor;
+}
+
+.icon-blue { color: #4facfe; box-shadow: 0 0 10px rgba(79,172,254,0.3); }
+.icon-cyan { color: #00f0ff; box-shadow: 0 0 10px rgba(0,240,255,0.3); }
+.icon-purple { color: #b300ff; box-shadow: 0 0 10px rgba(179,0,255,0.3); }
+
+/* Remove Bootstrap default body backgrounds to enforce ours */
+body {
+  background-color: var(--color-omni-bg) !important;
+}
+
+.sidebar-link {
+  display: block;
+  padding: 0.85rem 1.25rem;
+  color: rgba(255, 255, 255, 0.6);
+  text-decoration: none;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  transition: all 0.2s ease;
+  margin-bottom: 0.25rem;
+}
+
+.sidebar-link:hover, .sidebar-link.active {
+  background: rgba(0, 240, 255, 0.1);
+  color: #00f0ff;
+  box-shadow: inset 2px 0 0 #00f0ff;
+}
+
+.glass-panel {
+  background: rgba(18, 20, 28, 0.90) !important;
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  border-radius: 12px;
+  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3) !important;
+  padding: 1.5rem;
+}
+
+/* Gradient Border Injection using masks */
+.glass-panel.neon-bordered {
+  position: relative;
+  background: rgba(15, 18, 25, 0.95) !important;
+  border: 1px solid transparent !important;
+}
+
+.glass-panel.neon-bordered::before {
+  content: "";
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  border-radius: 12px;
+  padding: 2px;
+  background: linear-gradient(135deg, #00f0ff 0%, #b300ff 100%);
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+  box-shadow: inset 0 0 20px rgba(0, 240, 255, 0.1);
+}
+
+/* Overriding Bootstrap Grid Gutters slightly for premium feeling */
+.row {
+  --bs-gutter-x: 1.25rem;
+  --bs-gutter-y: 1.25rem;
+}
