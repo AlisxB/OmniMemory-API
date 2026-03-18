@@ -1,28 +1,37 @@
 'use client';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import useSWR, { mutate } from 'swr';
 import { fetchApi } from '@/lib/api';
-import GlassCard from '@/components/GlassCard';
-import { Plus, X, Shield, Activity, HardDrive } from 'lucide-react';
+import { 
+  Plus, X, Shield, Activity, HardDrive, 
+  RefreshCcw, Globe, AlertTriangle, CheckCircle2,
+  TrendingUp, Users, Cpu
+} from 'lucide-react';
 
 export default function TenantsPage() {
-  const { data, error, isLoading } = useSWR('/admin/tenants', fetchApi, { refreshInterval: 5000 });
+  const { data, error, isLoading } = useSWR('/admin/api/tenants', fetchApi, { refreshInterval: 10000 });
   const [searchTerm, setSearchTerm] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [rotatedKey, setRotatedKey] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   
-  // Form State
   const [newTenant, setNewTenant] = useState({
     tenant_id: '',
     name: '',
     buffer_window: 60,
     rate_limit: 100
   });
-  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  if (isLoading) return <div className="text-omni-neon animate-pulse text-lg p-5">Iniciando varredura na DB...</div>;
-  if (error) return <div className="text-omni-accent font-mono p-5">Erro ao recuperar malha: {error.message}</div>;
+  if (isLoading) return <div className="text-omni-neon animate-pulse text-lg p-5 font-mono">📡 Sincronizando com a malha central...</div>;
+  if (error) return <div className="text-omni-accent font-mono p-5">🚨 Falha na comunicação: {error.message}</div>;
 
   const tenants = data?.tenants || [];
+  const stats = {
+    total: tenants.length,
+    active: tenants.filter((t: any) => t.is_active).length,
+    totalTokens: tenants.reduce((acc: number, t: any) => acc + (t.stats?.tokens || 0), 0)
+  };
+
   const filtered = tenants.filter((t: any) => 
     t.tenant_id.toLowerCase().includes(searchTerm.toLowerCase()) || 
     t.name.toLowerCase().includes(searchTerm.toLowerCase())
@@ -32,10 +41,10 @@ export default function TenantsPage() {
     e.preventDefault();
     setIsSubmitting(true);
     try {
-      await fetchApi('/admin/tenants', {
+      const res = await fetchApi('/admin/api/tenants', {
         method: 'POST',
         body: JSON.stringify({
-          tenant_id: newTenant.tenant_id,
+          id: newTenant.tenant_id,
           name: newTenant.name,
           settings: {
             buffer_window_seconds: newTenant.buffer_window,
@@ -43,8 +52,9 @@ export default function TenantsPage() {
           }
         })
       });
-      mutate('/admin/tenants');
+      mutate('/admin/api/tenants');
       setIsModalOpen(false);
+      if (res?.data?.api_key) setRotatedKey(res.data.api_key);
       setNewTenant({ tenant_id: '', name: '', buffer_window: 60, rate_limit: 100 });
     } catch (err: any) {
       alert('Erro ao criar tenant: ' + err.message);
@@ -53,160 +63,188 @@ export default function TenantsPage() {
     }
   };
 
+  const rotateKey = async (id: string) => {
+    if (!confirm(`Deseja REALMENTE rotacionar a chave de ${id}? A chave antiga será invalidada imediatamente.`)) return;
+    try {
+      const res = await fetchApi(`/admin/api/tenants/${id}/rotate-key`, { method: 'POST' });
+      setRotatedKey(res.data.api_key);
+      mutate('/admin/api/tenants');
+    } catch (err: any) {
+      alert('Erro ao rotacionar chave: ' + err.message);
+    }
+  };
+
+  const syncWebhook = async (id: string) => {
+    const url = prompt("Digite a URL do Webhook (n8n/Endpoint):");
+    if (!url) return;
+    try {
+      await fetchApi(`/admin/api/tenants/${id}/webhooks/sync`, {
+        method: 'POST',
+        body: JSON.stringify({ webhook_url: url })
+      });
+      alert('Webhook sincronizado com sucesso!');
+      mutate('/admin/api/tenants');
+    } catch (err: any) {
+      alert('Erro na sincronização: ' + err.message);
+    }
+  };
+
   return (
-    <div className="max-w-7xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500 relative">
-      <header className="flex items-center justify-between">
+    <div className="container-fluid p-0 animate-in fade-in duration-700 pb-5">
+      
+      {/* HEADER */}
+      <div className="d-flex justify-content-between align-items-center mb-4">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Gerenciar Tenants</h1>
-          <p className="text-white/60 mt-1">Malha central de clientes e limites de IA.</p>
+          <h1 className="dash-title mb-0">CENTRAL DE TENANTS</h1>
+          <div className="dash-subtitle mt-1">Gerencie chaves, limites e instâncias da rede OmniMemory.</div>
         </div>
         <button 
           onClick={() => setIsModalOpen(true)}
-          className="bg-omni-neon text-black font-semibold px-6 py-2 rounded-full hover:shadow-[0_0_20px_rgba(0,245,255,0.4)] transition-all flex items-center gap-2"
+          className="btn btn-sm px-4 py-2 font-bold flex align-items-center gap-2"
+          style={{backgroundColor: '#00f0ff', color: '#000', borderRadius: '8px', border: 'none'}}
         >
-          <Plus size={18} /> Criar Tenant
+          <Plus size={16} /> NOVO TENANT
         </button>
-      </header>
+      </div>
 
-      <GlassCard>
-        <div className="flex justify-between items-center mb-6">
-          <div className="relative">
-            <input 
-              type="text" 
-              placeholder="🔍 Buscar por ID ou nome..." 
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-80 bg-white/5 border border-white/10 rounded-lg py-2 pl-4 pr-4 text-white placeholder-white/20 focus:outline-none focus:ring-2 focus:ring-omni-neon/50 focus:border-omni-neon transition-all"
-            />
+      {/* KPI ROW */}
+      <div className="row mb-4">
+        <div className="col-md-4">
+          <div className="glass-panel h-100">
+            <div className="kpi-label">TOTAL DE CLIENTES</div>
+            <div className="d-flex align-items-baseline">
+              <span className="kpi-value">{stats.total}</span>
+              <span className="kpi-perc">+0%</span>
+            </div>
           </div>
         </div>
+        <div className="col-md-4">
+          <div className="glass-panel h-100">
+            <div className="kpi-label">INSTÂNCIAS ATIVAS</div>
+            <div className="d-flex align-items-baseline">
+              <span className="kpi-value text-success">{stats.active}</span>
+              <span className="kpi-perc">+0%</span>
+            </div>
+          </div>
+        </div>
+        <div className="col-md-4">
+          <div className="glass-panel h-100">
+            <div className="kpi-label">CONSUMO TOTAL (TOKENS)</div>
+            <div className="d-flex align-items-baseline">
+              <span className="kpi-value" style={{fontSize: '1.8rem'}}>{(stats.totalTokens / 1000).toFixed(1)}k</span>
+              <span className="ms-2 text-white-50" style={{fontSize: '0.8rem'}}>TKS</span>
+            </div>
+          </div>
+        </div>
+      </div>
 
-        <div className="overflow-x-auto">
-          <table className="omni-table">
+      {/* MAIN DATA ROW */}
+      <div className="glass-panel p-0 overflow-hidden">
+        <div className="p-3 d-flex justify-content-between align-items-center border-bottom border-white-10 bg-white-5">
+          <div className="position-relative" style={{width: '300px'}}>
+            <input 
+              type="text" 
+              placeholder="🔍 Filtrar ID ou nome..." 
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="form-control form-control-sm bg-transparent border-white-10 text-white"
+              style={{borderRadius: '8px'}}
+            />
+          </div>
+          <div className="text-omni-label opacity-50 m-0">Sincronizado via Rede Neural</div>
+        </div>
+
+        <div className="table-responsive">
+          <table className="omni-table mb-0">
             <thead>
-              <tr className="border-b border-white/10 text-white/50 text-sm uppercase tracking-wider">
-                <th className="pb-4 pt-2 font-medium">Tenant ID / Nome</th>
-                <th className="pb-4 pt-2 font-medium">Status</th>
-                <th className="pb-4 pt-2 font-medium">Buffer</th>
-                <th className="pb-4 pt-2 font-medium">RP Minuto</th>
-                <th className="pb-4 pt-2 font-medium text-right">Ações</th>
+              <tr>
+                <th>Identificação</th>
+                <th>Status / Saúde</th>
+                <th>Configurações</th>
+                <th>API Key (Sufixo)</th>
+                <th className="text-end">Comandos</th>
               </tr>
             </thead>
             <tbody>
               {filtered.map((tenant: any) => (
-                <tr key={tenant.tenant_id} className="border-b border-white/5 hover:bg-white/[0.02] transition-colors group">
-                  <td className="py-4 px-3">
-                    <div className="font-medium text-white group-hover:text-omni-neon transition-colors">{tenant.tenant_id}</div>
-                    <div className="text-xs text-white/40">{tenant.name}</div>
+                <tr key={tenant.tenant_id}>
+                  <td>
+                    <div className="fw-bold text-white mb-0">{tenant.tenant_id}</div>
+                    <div style={{fontSize: '0.7rem', color: 'rgba(255,255,255,0.4)'}}>{tenant.name}</div>
                   </td>
-                  <td className="py-4 px-3">
+                  <td>
                     {tenant.is_active ? 
                       <span className="badge-status-green">Ativo</span> : 
-                      <span className="text-omni-accent bg-omni-accent/10 px-2 py-1 rounded text-xs border border-omni-accent/20">Inativo</span>
+                      <span className="badge bg-danger bg-opacity-10 text-danger border border-danger border-opacity-20" style={{fontSize: '0.65rem'}}>Inativo</span>
                     }
                   </td>
-                  <td className="py-4 px-3 text-white/70 font-mono">
-                    <Activity size={14} className="inline mr-2 text-omni-neon/50" />
-                    {tenant.settings?.buffer_window_seconds ?? 0}s
+                  <td>
+                    <div className="d-flex gap-3 font-mono" style={{fontSize: '0.75rem'}}>
+                      <span className="text-white-50"><Activity size={12} className="me-1 text-omni-neon" />{tenant.settings?.buffer_window_seconds ?? 0}s</span>
+                      <span className="text-white-50"><HardDrive size={12} className="me-1 text-omni-purple" />{tenant.settings?.rate_limit_rpm ?? '∞'} <span style={{fontSize: '0.6rem'}}>RPM</span></span>
+                    </div>
                   </td>
-                  <td className="py-4 px-3 text-white/70 font-mono">
-                    <HardDrive size={14} className="inline mr-2 text-omni-purple/50" />
-                    {tenant.settings?.rate_limit_rpm ?? 'Inf.'}
+                  <td>
+                    <code style={{fontSize: '0.7rem', color: '#00f0ff', opacity: 0.7}}>••••{tenant.api_key_info?.suffix || '????'}</code>
+                    <div style={{fontSize: '0.65rem', color: 'rgba(255,255,255,0.3)'}}>{tenant.api_key_info?.age_days ?? '?'} dias</div>
                   </td>
-                  <td className="py-4 px-3 text-right">
-                    <button className="text-xs border border-white/20 rounded px-3 py-1 text-white hover:border-omni-neon hover:text-omni-neon transition-colors">
-                      <Shield size={12} className="inline mr-1" /> Chaves
-                    </button>
+                  <td className="text-end">
+                    <div className="d-flex gap-2 justify-content-end">
+                      <button onClick={() => syncWebhook(tenant.tenant_id)} className="btn btn-sm btn-outline-light border-white-10 opacity-50 hover-opacity-100 p-1 px-2"><Globe size={14} /></button>
+                      <button onClick={() => rotateKey(tenant.tenant_id)} className="btn btn-sm btn-outline-warning border-white-10 opacity-50 hover-opacity-100 p-1 px-2"><RefreshCcw size={14} /></button>
+                    </div>
                   </td>
                 </tr>
               ))}
-              {filtered.length === 0 && (
-                <tr>
-                  <td colSpan={5} className="py-8 text-center text-white/40 italic">Nenhum tenant mapeado nesta malha.</td>
-                </tr>
-              )}
             </tbody>
           </table>
         </div>
-      </GlassCard>
+      </div>
 
-      {/* MODAL OVERLAY */}
+      {/* MODAL: EXIBIÇÃO DE CHAVE */}
+      {rotatedKey && (
+        <div className="position-fixed top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center z-3" style={{backgroundColor: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(8px)'}}>
+          <div className="glass-panel" style={{maxWidth: '400px', width: '90%'}}>
+            <h5 className="text-omni-neon mb-3 flex items-center gap-2"><Shield size={20} /> CHAVE GERADA</h5>
+            <p style={{fontSize: '0.8rem', color: 'rgba(255,255,255,0.7)'}}>Copie agora. Por segurança, esta chave **não será exibida novamente**.</p>
+            <div className="bg-black bg-opacity-50 p-3 rounded mb-4 font-mono text-omni-neon" style={{fontSize: '0.8rem', wordBreak: 'break-all'}}>
+              {rotatedKey}
+            </div>
+            <button onClick={() => setRotatedKey(null)} className="btn w-100 py-2 font-bold" style={{backgroundColor: '#00f0ff', color: '#000', borderRadius: '8px'}}>SALVEI COM SEGURANÇA</button>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: NOVO TENANT */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-[2000] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-300">
-          <GlassCard className="w-full max-w-lg border-omni-neon/30 !bg-omni-bg shadow-[0_0_50px_rgba(0,245,255,0.1)] relative">
-            <button 
-              onClick={() => setIsModalOpen(false)}
-              className="absolute top-4 right-4 text-white/40 hover:text-white transition-colors"
-            >
-              <X size={24} />
-            </button>
-            
-            <h2 className="text-2xl font-bold mb-6 flex items-center gap-2">
-              <Plus className="text-omni-neon" /> Novo Tenant
-            </h2>
-
-            <form onSubmit={handleCreate} className="space-y-5">
-              <div className="space-y-1">
-                <label className="text-xs font-bold text-white/50 uppercase tracking-widest">Identificador único (ID)</label>
-                <input 
-                  required
-                  value={newTenant.tenant_id}
-                  onChange={e => setNewTenant({...newTenant, tenant_id: e.target.value})}
-                  className="w-full bg-white/5 border border-white/10 rounded-lg py-2.5 px-4 text-white focus:ring-2 focus:ring-omni-neon/40 focus:outline-none transition-all"
-                  placeholder="ex: clinica_saude_01"
-                />
+        <div className="position-fixed top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center z-3" style={{backgroundColor: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)'}}>
+          <div className="glass-panel" style={{maxWidth: '500px', width: '90%'}}>
+            <div className="d-flex justify-content-between align-items-center mb-4">
+              <h5 className="mb-0 text-white font-bold">NOVO REGISTRO</h5>
+              <button onClick={() => setIsModalOpen(false)} className="btn text-white-50 p-0"><X size={20} /></button>
+            </div>
+            <form onSubmit={handleCreate}>
+              <div className="mb-3">
+                <label className="kpi-label mb-1">ID do Tenant (Slug)</label>
+                <input required value={newTenant.tenant_id} onChange={e => setNewTenant({...newTenant, tenant_id: e.target.value.toLowerCase().replace(/\s+/g, '_')})} className="form-control bg-transparent border-white-10 text-white py-2" style={{borderRadius: '8px'}} placeholder="ex: michel_vereador" />
               </div>
-
-              <div className="space-y-1">
-                <label className="text-xs font-bold text-white/50 uppercase tracking-widest">Nome de Exibição</label>
-                <input 
-                  required
-                  value={newTenant.name}
-                  onChange={e => setNewTenant({...newTenant, name: e.target.value})}
-                  className="w-full bg-white/5 border border-white/10 rounded-lg py-2.5 px-4 text-white focus:ring-2 focus:ring-omni-neon/40 focus:outline-none transition-all"
-                  placeholder="Ex: Clínica Saúde Matriz"
-                />
+              <div className="mb-3">
+                <label className="kpi-label mb-1">Nome Comercial</label>
+                <input required value={newTenant.name} onChange={e => setNewTenant({...newTenant, name: e.target.value})} className="form-control bg-transparent border-white-10 text-white py-2" style={{borderRadius: '8px'}} placeholder="Ex: Gabinete Michel" />
               </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1">
-                  <label className="text-xs font-bold text-white/50 uppercase tracking-widest">Buffer (Segundos)</label>
-                  <input 
-                    type="number"
-                    value={newTenant.buffer_window}
-                    onChange={e => setNewTenant({...newTenant, buffer_window: parseInt(e.target.value)})}
-                    className="w-full bg-white/5 border border-white/10 rounded-lg py-2.5 px-4 text-white focus:ring-2 focus:ring-omni-neon/40 focus:outline-none transition-all"
-                  />
+              <div className="row mb-4">
+                <div className="col-6">
+                  <label className="kpi-label mb-1">Buffer (Seg)</label>
+                  <input type="number" value={newTenant.buffer_window} onChange={e => setNewTenant({...newTenant, buffer_window: parseInt(e.target.value)})} className="form-control bg-transparent border-white-10 text-white py-2" style={{borderRadius: '8px'}} />
                 </div>
-                <div className="space-y-1">
-                  <label className="text-xs font-bold text-white/50 uppercase tracking-widest">Rate Limit (RPM)</label>
-                  <input 
-                    type="number"
-                    value={newTenant.rate_limit}
-                    onChange={e => setNewTenant({...newTenant, rate_limit: parseInt(e.target.value)})}
-                    className="w-full bg-white/5 border border-white/10 rounded-lg py-2.5 px-4 text-white focus:ring-2 focus:ring-omni-neon/40 focus:outline-none transition-all"
-                  />
+                <div className="col-6">
+                  <label className="kpi-label mb-1">Limites (RPM)</label>
+                  <input type="number" value={newTenant.rate_limit} onChange={e => setNewTenant({...newTenant, rate_limit: parseInt(e.target.value)})} className="form-control bg-transparent border-white-10 text-white py-2" style={{borderRadius: '8px'}} />
                 </div>
               </div>
-
-              <div className="pt-4 flex gap-3">
-                <button 
-                  type="button"
-                  onClick={() => setIsModalOpen(false)}
-                  className="flex-1 py-3 border border-white/10 rounded-lg text-white/70 hover:bg-white/5 transition-all"
-                >
-                  Cancelar
-                </button>
-                <button 
-                  type="submit"
-                  disabled={isSubmitting}
-                  className="flex-1 py-3 bg-omni-neon text-black font-bold rounded-lg hover:shadow-[0_0_20px_rgba(0,245,255,0.4)] transition-all disabled:opacity-50"
-                >
-                  {isSubmitting ? 'Provisionando...' : 'Confirmar Registro'}
-                </button>
-              </div>
+              <button type="submit" disabled={isSubmitting} className="btn w-100 py-2 font-bold" style={{backgroundColor: '#00f0ff', color: '#000', borderRadius: '8px'}}>CONFIRMAR REGISTRO</button>
             </form>
-          </GlassCard>
+          </div>
         </div>
       )}
     </div>
