@@ -2,6 +2,7 @@
 
 import React from 'react';
 import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import { LayoutDashboard, Users, BrainCircuit, Webhook, ChevronLeft, ChevronRight } from 'lucide-react';
 
 interface SidebarProps {
@@ -11,6 +12,13 @@ interface SidebarProps {
 }
 
 export default function Sidebar({ isPinned, onTogglePin, onHoverChange }: SidebarProps) {
+  const pathname = usePathname();
+
+  const isActive = (path: string) => {
+    if (path === '/') return pathname === '/';
+    return pathname?.startsWith(path);
+  };
+
   return (
     <aside 
       className={`sidebar-modern ${isPinned ? 'pinned' : ''}`}
@@ -36,19 +44,19 @@ export default function Sidebar({ isPinned, onTogglePin, onHoverChange }: Sideba
       </div>
 
       <nav className="d-flex flex-column px-2 mt-3 gap-2">
-        <Link href="/" className="sidebar-link active d-flex align-items-center gap-3">
+        <Link href="/" className={`sidebar-link d-flex align-items-center gap-3 ${isActive('/') ? 'active' : ''}`}>
           <div className="sidebar-icon-wrapper"><LayoutDashboard size={20} /></div>
           <span className="sidebar-text-content">Visão Geral</span>
         </Link>
-        <Link href="/tenants" className="sidebar-link d-flex align-items-center gap-3">
+        <Link href="/tenants" className={`sidebar-link d-flex align-items-center gap-3 ${isActive('/tenants') ? 'active' : ''}`}>
           <div className="sidebar-icon-wrapper"><Users size={20} /></div>
           <span className="sidebar-text-content">Tenants</span>
         </Link>
-        <Link href="/memory" className="sidebar-link d-flex align-items-center gap-3">
+        <Link href="/memory" className={`sidebar-link d-flex align-items-center gap-3 ${isActive('/memory') ? 'active' : ''}`}>
           <div className="sidebar-icon-wrapper"><BrainCircuit size={20} /></div>
           <span className="sidebar-text-content">Memória</span>
         </Link>
-        <Link href="/webhooks" className="sidebar-link d-flex align-items-center gap-3">
+        <Link href="/webhooks" className={`sidebar-link d-flex align-items-center gap-3 ${isActive('/webhooks') ? 'active' : ''}`}>
           <div className="sidebar-icon-wrapper"><Webhook size={20} /></div>
           <span className="sidebar-text-content">Webhooks</span>
         </Link>
