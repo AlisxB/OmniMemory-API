@@ -64,6 +64,7 @@ coverage.xml
 
 # ── Contexto AI ────────────────────────────────────────────
 .context/
+AGENTS.md
 
 # GitHub Actions
 .github/
