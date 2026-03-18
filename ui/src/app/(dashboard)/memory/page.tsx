@@ -2,7 +2,11 @@
 import { useState } from 'react';
 import useSWR from 'swr';
 import { fetchApi } from '@/lib/api';
-import GlassCard from '@/components/GlassCard';
+import { 
+  Search, BrainCircuit, User, Database, 
+  Sparkles, Layers, ArrowRight, History,
+  Info, Cpu
+} from 'lucide-react';
 
 export default function MemoryExplorerPage() {
   const [tenantId, setTenantId] = useState('');
@@ -12,7 +16,7 @@ export default function MemoryExplorerPage() {
   const [isSearching, setIsSearching] = useState(false);
 
   // Busca lista de tenants para o select
-  const { data: tenantsData } = useSWR('/admin/tenants', fetchApi);
+  const { data: tenantsData } = useSWR('/admin/api/tenants', fetchApi);
   const tenants = tenantsData?.tenants || [];
 
   const handleSearch = async (e: React.FormEvent) => {
@@ -25,111 +29,151 @@ export default function MemoryExplorerPage() {
         tenant_id: tenantId,
         external_user_id: userId,
         query: query,
-        limit: '5'
+        limit: '6'
       });
       const res = await fetchApi(`/v1/context/search?${qs.toString()}`);
       setSearchResults(res.data || []);
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      alert('Erro na busca semântica');
+      alert('Erro na busca semântica: ' + err.message);
     } finally {
       setIsSearching(false);
     }
   };
 
   return (
-    <div className="max-w-7xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-      <header className="flex items-center justify-between">
+    <div className="container-fluid p-0 animate-in fade-in duration-700 pb-5">
+      
+      {/* HEADER */}
+      <div className="d-flex justify-content-between align-items-center mb-4">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Explorador de Memória</h1>
-          <p className="text-white/60 mt-1">Busca Semântica & Análise de Vetores (RAG). Procure pelos fatos persistidos do usuário.</p>
+          <h1 className="dash-title mb-0">EXPLORADOR DE MEMÓRIA</h1>
+          <div className="dash-subtitle mt-1">Busca Semântica & Auditoria de Vetores (RAG).</div>
         </div>
-        <div className="text-omni-purple font-mono border border-omni-purple/30 bg-omni-purple/10 px-4 py-2 rounded-full flex gap-2 items-center">
-          <div className="w-2 h-2 bg-omni-purple rounded-full animate-pulse flex-shrink-0" />
-          <span className="text-xs">Database Conectada</span>
+        <div className="glass-panel py-1 px-3 d-flex align-items-center gap-2" style={{height: 40, border: '1px solid rgba(179, 0, 255, 0.3) !important'}}>
+          <Cpu className="text-omni-purple animate-pulse" size={16} />
+          <span className="text-omni-label m-0" style={{color: '#b300ff', fontSize: '0.6rem'}}>Neural Active</span>
         </div>
-      </header>
+      </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <GlassCard className="md:col-span-1 space-y-6">
-          <h2 className="text-lg font-bold border-b border-white/10 pb-2">Parâmetros de Busca</h2>
-          <form onSubmit={handleSearch} className="space-y-4">
+      <div className="row">
+        {/* PAINEL DE PARÂMETROS */}
+        <div className="col-lg-4">
+          <div className="glass-panel mb-4">
+            <h6 className="fw-semibold text-white mb-4 text-uppercase" style={{fontSize: '0.8rem', letterSpacing: '0.05em'}}>Parâmetros de Busca</h6>
             
-            <div className="space-y-1">
-              <label className="text-xs font-medium text-white/50 uppercase tracking-wider">Tenant (Base)</label>
-              <select 
-                value={tenantId}
-                onChange={(e) => setTenantId(e.target.value)}
-                className="w-full bg-white/5 border border-white/10 rounded-lg py-2.5 px-3 text-white appearance-none focus:outline-none focus:ring-2 focus:ring-omni-neon/50 focus:border-omni-neon transition-all"
-              >
-                <option value="" className="bg-black">Selecione o Tenant</option>
-                {tenants.map((t: any) => (
-                  <option key={t.tenant_id} value={t.tenant_id} className="bg-black">{t.name} ({t.tenant_id})</option>
-                ))}
-              </select>
-            </div>
-
-            <div className="space-y-1">
-              <label className="text-xs font-medium text-white/50 uppercase tracking-wider">User ID (WhatsApp / Doc)</label>
-              <input 
-                type="text" 
-                value={userId}
-                onChange={(e) => setUserId(e.target.value)}
-                placeholder="Ex: 558599..."
-                className="w-full bg-white/5 border border-white/10 rounded-lg py-2.5 px-4 text-white placeholder-white/20 focus:outline-none focus:ring-2 focus:ring-omni-neon/50 focus:border-omni-neon transition-all"
-              />
-            </div>
-
-            <div className="space-y-1">
-              <label className="text-xs font-medium text-white/50 uppercase tracking-wider">Busca Neural (Pergunta)</label>
-              <textarea 
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                rows={3}
-                placeholder="Qual o nome do cachorro deste usuário?"
-                className="w-full bg-white/5 border border-white/10 rounded-lg py-2.5 px-4 text-white placeholder-white/20 focus:outline-none focus:ring-2 focus:ring-omni-neon/50 focus:border-omni-neon transition-all resize-none"
-              />
-            </div>
-
-            <button 
-              type="submit" 
-              disabled={isSearching || !tenantId || !userId || !query}
-              className="w-full bg-omni-neon text-black font-semibold py-3 rounded-lg hover:shadow-[0_0_20px_rgba(0,245,255,0.4)] transition-all duration-300 disabled:opacity-50 mt-4 flex items-center justify-center gap-2"
-            >
-              {isSearching ? 'Calculando Embeddings...' : '🔎 Sondar Rede Neural'}
-            </button>
-          </form>
-        </GlassCard>
-
-        <GlassCard className="md:col-span-2 min-h-[500px]">
-          <h2 className="text-lg font-bold border-b border-white/10 pb-2 mb-6">Mapeamento Retornado</h2>
-          
-          {searchResults.length === 0 && !isSearching && (
-            <div className="flex w-full h-full items-center justify-center -mt-10 opacity-30">
-              <div className="text-center">
-                <div className="text-4xl mb-4 text-omni-purple">🌌</div>
-                <p>Nenhuma memória em contexto.</p>
-                <p className="text-sm">Selecione os parâmetros e pesquise.</p>
+            <form onSubmit={handleSearch}>
+              <div className="mb-3">
+                <label className="kpi-label mb-1">Tenant (Base)</label>
+                <select 
+                  value={tenantId}
+                  onChange={(e) => setTenantId(e.target.value)}
+                  className="form-control bg-transparent border-white-10 text-white py-2"
+                  style={{borderRadius: '8px', appearance: 'none'}}
+                >
+                  <option value="" className="bg-black">Selecione o Cliente</option>
+                  {tenants.map((t: any) => (
+                    <option key={t.tenant_id} value={t.tenant_id} className="bg-black">{t.name}</option>
+                  ))}
+                </select>
               </div>
-            </div>
-          )}
 
-          {searchResults.length > 0 && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="mb-3">
+                <label className="kpi-label mb-1">ID do Usuário (External)</label>
+                <input 
+                  type="text" 
+                  value={userId}
+                  onChange={(e) => setUserId(e.target.value)}
+                  placeholder="Ex: 558599..."
+                  className="form-control bg-transparent border-white-10 text-white py-2 font-mono"
+                  style={{borderRadius: '8px', fontSize: '0.85rem'}}
+                />
+              </div>
+
+              <div className="mb-4">
+                <label className="kpi-label mb-1">Busca Neural (Pergunta)</label>
+                <textarea 
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  rows={4}
+                  placeholder="O que o bot sabe sobre..."
+                  className="form-control bg-transparent border-white-10 text-white py-2"
+                  style={{borderRadius: '8px', fontSize: '0.85rem', resize: 'none'}}
+                />
+              </div>
+
+              <button 
+                type="submit" 
+                disabled={isSearching || !tenantId || !userId || !query}
+                className="btn w-100 py-2 font-bold"
+                style={{backgroundColor: '#00f0ff', color: '#000', borderRadius: '8px', border: 'none'}}
+              >
+                {isSearching ? 'PROCESSANDO...' : 'SONDAR REDE NEURAL'}
+              </button>
+            </form>
+          </div>
+
+          <div className="glass-panel py-3 px-3 d-flex gap-3 opacity-75">
+            <Info size={16} className="text-omni-neon mt-1" />
+            <p className="mb-0" style={{fontSize: '0.7rem', color: 'rgba(255,255,255,0.5)', lineHeight: 1.4}}>
+              A busca utiliza **Embeddings de Vetores** para encontrar memórias por similaridade semântica.
+            </p>
+          </div>
+        </div>
+
+        {/* RESULTADOS */}
+        <div className="col-lg-8">
+          <div className="glass-panel h-100 min-h-[500px]">
+            <div className="d-flex justify-content-between align-items-center mb-4">
+              <h6 className="fw-semibold text-white mb-0 text-uppercase" style={{fontSize: '0.85rem', letterSpacing: '0.05em'}}>Mapeamento de Fatos Detectados</h6>
+              <div className="text-white-50 font-mono" style={{fontSize: '0.7rem'}}>Resultados: {searchResults.length}</div>
+            </div>
+
+            {searchResults.length === 0 && !isSearching && (
+              <div className="d-flex flex-column align-items-center justify-content-center py-5 opacity-25">
+                <BrainCircuit size={48} className="mb-3" />
+                <div className="text-center">
+                  <h6 className="mb-1">Vácuo de Memória</h6>
+                  <p className="small mb-0">Preencha os filtros para sondar o contexto.</p>
+                </div>
+              </div>
+            )}
+
+            {isSearching && (
+              <div className="row g-3">
+                {[1,2,4].map(i => (
+                  <div key={i} className="col-md-6 col-xl-4">
+                    <div className="glass-panel border-white-5 animate-pulse" style={{height: '140px', background: 'rgba(255,255,255,0.03) !important'}}></div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div className="row g-3">
               {searchResults.map((mem: any, i: number) => (
-                <div key={i} className="bg-white/5 border border-white/10 rounded-xl p-4 hover:border-omni-neon/50 transition-colors relative group">
-                  <div className="absolute -top-2 -right-2 bg-omni-bg text-omni-neon text-xs border border-omni-neon px-2 py-0.5 rounded-full z-10 font-mono">
-                    {(mem.score * 100).toFixed(1)}% Similaridade
+                <div key={i} className="col-md-6 col-xl-4">
+                  <div className="glass-panel p-3 border-white-10 h-100 d-flex flex-column justify-content-between position-relative" style={{background: 'rgba(255,255,255,0.02) !important'}}>
+                    <div className="position-absolute top-0 end-0 p-2">
+                       <span className="badge border border-omni-neon border-opacity-20 text-omni-neon" style={{fontSize: '0.6rem', background: 'rgba(0,240,255,0.05)'}}>
+                         {(mem.score * 100).toFixed(0)}% MATCH
+                       </span>
+                    </div>
+                    
+                    <div className="mb-3">
+                      <div className="kpi-label mb-2" style={{fontSize: '0.6rem', color: '#b300ff'}}>Fato Neural</div>
+                      <p className="text-white-50 mb-0" style={{fontSize: '0.75rem', lineHeight: 1.5}}>{mem.value}</p>
+                    </div>
+
+                    <div className="pt-2 border-top border-white-5 d-flex justify-content-between align-items-center">
+                      <code style={{fontSize: '0.6rem', color: 'rgba(255,255,255,0.2)'}}>ID:{mem.key.slice(0,6)}</code>
+                      <ArrowRight size={10} className="text-white-50" />
+                    </div>
                   </div>
-                  <div className="text-xs text-omni-purple uppercase tracking-widest font-bold mb-1">
-                    [Fact ID: {mem.key.slice(0, 8)}]
-                  </div>
-                  <p className="text-white/90 text-sm leading-relaxed mt-2">{mem.value}</p>
                 </div>
               ))}
             </div>
-          )}
-        </GlassCard>
+          </div>
+        </div>
       </div>
     </div>
   );
