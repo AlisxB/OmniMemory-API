@@ -9,6 +9,7 @@ import httpx
 from ..database import AsyncSessionLocal
 from ..domain.webhooks.model import WebhookSubscription
 from ..core.security import HMACSigner
+from ..redis import RedisManager
 
 logger = logging.getLogger(__name__)
 
@@ -145,6 +146,7 @@ class WebhookWorker:
                         )
                         resp.raise_for_status()
                         logger.info(f"Webhook SUCCESS: event={event} url={wh.url}")
+                        await RedisManager.incr_metric("webhook:processed")
                 except Exception as e:
                     logger.warning(f"Webhook FAILED: url={wh.url} error={e}")
                     
@@ -160,6 +162,7 @@ class WebhookWorker:
                         await r.rpush(WEBHOOK_QUEUE_KEY, json.dumps(job))
                     else:
                         logger.error(f"Webhook DEAD: url={wh.url} após {attempts+1} tentativas")
+                        await RedisManager.incr_metric("webhook:failed")
 
         except Exception as e:
             logger.error(f"Critical error in _dispatch_job: {e}", exc_info=True)
