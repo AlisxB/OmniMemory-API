@@ -228,3 +228,31 @@ class RedisManager:
         except Exception as e:
             logger.error(f"Redis health check failed: {e}")
             return False
+
+    # ── Admin & Analytics Helpers ───────────────────────────────────────────
+
+    @staticmethod
+    async def get_list_length(key: str) -> int:
+        """Retorna o tamanho de uma lista no Redis."""
+        r = await get_redis()
+        return await r.llen(key)
+
+    @staticmethod
+    async def scan_keys(match_pattern: str):
+        """Iterador assíncrono para escanear chaves no Redis."""
+        r = await get_redis()
+        async for key in r.scan_iter(match=match_pattern):
+            yield key
+
+    @staticmethod
+    async def incr_metric(metric_name: str, amount: int = 1):
+        """Incrementa um contador global de métrica."""
+        r = await get_redis()
+        await r.incr(f"metric:{metric_name}", amount)
+
+    @staticmethod
+    async def get_metric(metric_name: str) -> int:
+        """Recupera o valor de um contador global de métrica."""
+        r = await get_redis()
+        val = await r.get(f"metric:{metric_name}")
+        return int(val) if val else 0
