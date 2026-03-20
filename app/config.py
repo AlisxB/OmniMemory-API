@@ -39,7 +39,7 @@ class Settings(BaseSettings):
 
     # ─── Rate Limiting ───────────────────────────────────────────────────────────
     global_rate_limit_rpm: int = 200     # Limitação global (fallback)
-    admin_rate_limit_rpm: int = 10       # Admin routes — agressivo anti-brute
+    admin_rate_limit_rpm: int = 200      # Admin routes — compatível com dashboard polling
 
     # ─── Crypto ─────────────────────────────────────────────────────────────────
     encryption_key: str = ""  # Fernet key para AES-256 — gerada via CLI se vazio
