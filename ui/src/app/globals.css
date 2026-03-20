@@ -196,3 +196,17 @@ body {
 .text-omni-neon { color: var(--color-omni-neon) !important; }
 .text-omni-purple { color: var(--color-omni-purple) !important; }
 .text-omni-accent { color: var(--color-omni-accent) !important; }
+
+.neon-bordered {
+  border: 1px solid rgba(0, 240, 255, 0.3) !important;
+  box-shadow: 0 0 15px rgba(0, 240, 255, 0.1), inset 0 0 15px rgba(0, 240, 255, 0.05) !important;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: .5; }
+}
+
+.animate-pulse {
+  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
