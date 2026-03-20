@@ -5,72 +5,135 @@ import { fetchApi } from '@/lib/api';
 import { 
   Plus, X, Shield, Activity, HardDrive, 
   RefreshCcw, Globe, AlertTriangle, CheckCircle2,
-  TrendingUp, Users, Cpu
+  TrendingUp, Users, Cpu, Trash2, Edit3
 } from 'lucide-react';
 
 export default function TenantsPage() {
-  const { data, error, isLoading } = useSWR('/admin/api/tenants', fetchApi, { refreshInterval: 10000 });
+  const { data: rawData, error, isLoading } = useSWR('/admin/api/tenants', fetchApi, { refreshInterval: 10000 });
   const [searchTerm, setSearchTerm] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [rotatedKey, setRotatedKey] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [feedback, setFeedback] = useState<{message: string, type: 'success' | 'error'} | null>(null);
+  const [isEditing, setIsEditing] = useState(false);
   
   const [newTenant, setNewTenant] = useState({
-    tenant_id: '',
+    id: '',
     name: '',
     buffer_window: 60,
-    rate_limit: 100
+    rate_limit: 100,
+    is_active: true
   });
 
   if (isLoading) return <div className="text-omni-neon animate-pulse text-lg p-5 font-mono">📡 Sincronizando com a malha central...</div>;
   if (error) return <div className="text-omni-accent font-mono p-5">🚨 Falha na comunicação: {error.message}</div>;
 
-  const tenants = data?.tenants || [];
+  const tenants = rawData?.data || [];
   const stats = {
     total: tenants.length,
     active: tenants.filter((t: any) => t.is_active).length,
-    totalTokens: tenants.reduce((acc: number, t: any) => acc + (t.stats?.tokens || 0), 0)
+    totalTokens: tenants.reduce((acc: number, t: any) => acc + (t.total_usage?.tokens || 0), 0)
   };
 
   const filtered = tenants.filter((t: any) => 
-    t.tenant_id.toLowerCase().includes(searchTerm.toLowerCase()) || 
+    t.id.toLowerCase().includes(searchTerm.toLowerCase()) || 
     t.name.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  const handleCreate = async (e: React.FormEvent) => {
+  const handleCreateOrUpdate = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
+    setFeedback(null);
     try {
-      const res = await fetchApi('/admin/api/tenants', {
-        method: 'POST',
-        body: JSON.stringify({
-          id: newTenant.tenant_id,
-          name: newTenant.name,
-          settings: {
-            buffer_window_seconds: newTenant.buffer_window,
-            rate_limit_rpm: newTenant.rate_limit
-          }
-        })
-      });
+      if (isEditing) {
+        await fetchApi(`/admin/api/tenants/${newTenant.id}`, {
+          method: 'PATCH',
+          body: JSON.stringify({
+            name: newTenant.name,
+            is_active: newTenant.is_active,
+            settings: {
+              buffer_window_seconds: newTenant.buffer_window,
+              rate_limit_rpm: newTenant.rate_limit
+            }
+          })
+        });
+        setFeedback({ message: `Tenant ${newTenant.id} atualizado com sucesso.`, type: 'success' });
+      } else {
+        const res = await fetchApi('/admin/api/tenants', {
+          method: 'POST',
+          body: JSON.stringify({
+            id: newTenant.id,
+            name: newTenant.name,
+            settings: {
+              buffer_window_seconds: newTenant.buffer_window,
+              rate_limit_rpm: newTenant.rate_limit
+            }
+          })
+        });
+        if (res?.data?.api_key) setRotatedKey(res.data.api_key);
+        setFeedback({ message: `Tenant ${newTenant.id} criado com sucesso.`, type: 'success' });
+      }
       mutate('/admin/api/tenants');
       setIsModalOpen(false);
-      if (res?.data?.api_key) setRotatedKey(res.data.api_key);
-      setNewTenant({ tenant_id: '', name: '', buffer_window: 60, rate_limit: 100 });
+      resetForm();
     } catch (err: any) {
-      alert('Erro ao criar tenant: ' + err.message);
+      setFeedback({ message: `Erro ao ${isEditing ? 'atualizar' : 'criar'} tenant: ` + err.message, type: 'error' });
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const rotateKey = async (id: string) => {
-    if (!confirm(`Deseja REALMENTE rotacionar a chave de ${id}? A chave antiga será invalidada imediatamente.`)) return;
+  const handleDelete = async (id: string) => {
+    const adminKey = prompt(`Para deletar ${id}, digite a Chave de Super Admin:`);
+    if (!adminKey) return;
+    
+    if (!confirm(`TEM CERTEZA? Esta ação é irreversível e todos os dados de ${id} serão perdidos.`)) return;
+    
+    setFeedback(null);
     try {
-      const res = await fetchApi(`/admin/api/tenants/${id}/rotate-key`, { method: 'POST' });
-      setRotatedKey(res.data.api_key);
+      await fetchApi(`/admin/api/tenants/${id}`, {
+        method: 'DELETE',
+        headers: { 'X-Super-Admin-Key': adminKey }
+      });
+      setFeedback({ message: `Tenant ${id} removido da malha.`, type: 'success' });
       mutate('/admin/api/tenants');
     } catch (err: any) {
-      alert('Erro ao rotacionar chave: ' + err.message);
+      setFeedback({ message: 'Erro ao deletar tenant: ' + err.message, type: 'error' });
+    }
+  };
+
+  const openEdit = (tenant: any) => {
+    setNewTenant({
+      id: tenant.id,
+      name: tenant.name,
+      buffer_window: tenant.settings?.buffer_window_seconds || 60,
+      rate_limit: tenant.settings?.rate_limit_rpm || 100,
+      is_active: tenant.is_active
+    });
+    setIsEditing(true);
+    setIsModalOpen(true);
+  };
+
+  const resetForm = () => {
+    setNewTenant({ id: '', name: '', buffer_window: 60, rate_limit: 100, is_active: true });
+    setIsEditing(false);
+  };
+
+  const rotateKey = async (id: string) => {
+    const adminKey = prompt(`Digite a Chave de Super Admin para rotacionar a chave de ${id}:`);
+    if (!adminKey) return;
+
+    if (!confirm(`Deseja REALMENTE rotacionar a chave de ${id}? A chave antiga será invalidada imediatamente.`)) return;
+    try {
+      const res = await fetchApi(`/admin/api/tenants/${id}/rotate-key`, { 
+        method: 'POST',
+        headers: { 'X-Super-Admin-Key': adminKey }
+      });
+      setRotatedKey(res.data.api_key);
+      mutate('/admin/api/tenants');
+      setFeedback({ message: 'Chave rotacionada com sucesso.', type: 'success' });
+    } catch (err: any) {
+      setFeedback({ message: 'Erro ao rotacionar chave: ' + err.message, type: 'error' });
     }
   };
 
@@ -106,6 +169,12 @@ export default function TenantsPage() {
           <Plus size={16} /> NOVO TENANT
         </button>
       </div>
+
+      {feedback && (
+        <div className={`alert ${feedback.type === 'success' ? 'alert-success bg-success bg-opacity-10 border-success' : 'alert-danger bg-danger bg-opacity-10 border-danger'} text-white mb-4 animate-in slide-in-from-top duration-300`} style={{fontSize: '0.8rem', borderRadius: '8px'}}>
+          {feedback.message}
+        </div>
+      )}
 
       {/* KPI ROW */}
       <div className="row mb-4">
@@ -167,9 +236,9 @@ export default function TenantsPage() {
             </thead>
             <tbody>
               {filtered.map((tenant: any) => (
-                <tr key={tenant.tenant_id}>
+                <tr key={tenant.id}>
                   <td>
-                    <div className="fw-bold text-white mb-0">{tenant.tenant_id}</div>
+                    <div className="fw-bold text-white mb-0">{tenant.id}</div>
                     <div style={{fontSize: '0.7rem', color: 'rgba(255,255,255,0.4)'}}>{tenant.name}</div>
                   </td>
                   <td>
@@ -190,8 +259,10 @@ export default function TenantsPage() {
                   </td>
                   <td className="text-end">
                     <div className="d-flex gap-2 justify-content-end">
-                      <button onClick={() => syncWebhook(tenant.tenant_id)} className="btn btn-sm btn-outline-light border-white-10 opacity-50 hover-opacity-100 p-1 px-2"><Globe size={14} /></button>
-                      <button onClick={() => rotateKey(tenant.tenant_id)} className="btn btn-sm btn-outline-warning border-white-10 opacity-50 hover-opacity-100 p-1 px-2"><RefreshCcw size={14} /></button>
+                      <button onClick={() => openEdit(tenant)} className="btn btn-sm btn-outline-info border-white-10 opacity-50 hover-opacity-100 p-1 px-2"><Edit3 size={14} /></button>
+                      <button onClick={() => syncWebhook(tenant.id)} className="btn btn-sm btn-outline-light border-white-10 opacity-50 hover-opacity-100 p-1 px-2"><Globe size={14} /></button>
+                      <button onClick={() => rotateKey(tenant.id)} className="btn btn-sm btn-outline-warning border-white-10 opacity-50 hover-opacity-100 p-1 px-2"><RefreshCcw size={14} /></button>
+                      <button onClick={() => handleDelete(tenant.id)} className="btn btn-sm btn-outline-danger border-white-10 opacity-50 hover-opacity-100 p-1 px-2"><Trash2 size={14} /></button>
                     </div>
                   </td>
                 </tr>
@@ -215,24 +286,32 @@ export default function TenantsPage() {
         </div>
       )}
 
-      {/* MODAL: NOVO TENANT */}
+      {/* MODAL: NOVO/EDITAR TENANT */}
       {isModalOpen && (
         <div className="position-fixed top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center z-3" style={{backgroundColor: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)'}}>
           <div className="glass-panel" style={{maxWidth: '500px', width: '90%'}}>
             <div className="d-flex justify-content-between align-items-center mb-4">
-              <h5 className="mb-0 text-white font-bold">NOVO REGISTRO</h5>
-              <button onClick={() => setIsModalOpen(false)} className="btn text-white-50 p-0"><X size={20} /></button>
+              <h5 className="mb-0 text-white font-bold">{isEditing ? 'EDITAR REGISTRO' : 'NOVO REGISTRO'}</h5>
+              <button onClick={() => { setIsModalOpen(false); resetForm(); }} className="btn text-white-50 p-0"><X size={20} /></button>
             </div>
-            <form onSubmit={handleCreate}>
+            <form onSubmit={handleCreateOrUpdate}>
               <div className="mb-3">
                 <label className="kpi-label mb-1">ID do Tenant (Slug)</label>
-                <input required value={newTenant.tenant_id} onChange={e => setNewTenant({...newTenant, tenant_id: e.target.value.toLowerCase().replace(/\s+/g, '_')})} className="form-control bg-transparent border-white-10 text-white py-2" style={{borderRadius: '8px'}} placeholder="ex: michel_vereador" />
+                <input 
+                  required 
+                  disabled={isEditing}
+                  value={newTenant.id} 
+                  onChange={e => setNewTenant({...newTenant, id: e.target.value.toLowerCase().replace(/\s+/g, '_')})} 
+                  className={`form-control bg-transparent border-white-10 text-white py-2 ${isEditing ? 'opacity-50' : ''}`} 
+                  style={{borderRadius: '8px'}} 
+                  placeholder="ex: michel_vereador" 
+                />
               </div>
               <div className="mb-3">
                 <label className="kpi-label mb-1">Nome Comercial</label>
                 <input required value={newTenant.name} onChange={e => setNewTenant({...newTenant, name: e.target.value})} className="form-control bg-transparent border-white-10 text-white py-2" style={{borderRadius: '8px'}} placeholder="Ex: Gabinete Michel" />
               </div>
-              <div className="row mb-4">
+              <div className="row mb-3">
                 <div className="col-6">
                   <label className="kpi-label mb-1">Buffer (Seg)</label>
                   <input type="number" value={newTenant.buffer_window} onChange={e => setNewTenant({...newTenant, buffer_window: parseInt(e.target.value)})} className="form-control bg-transparent border-white-10 text-white py-2" style={{borderRadius: '8px'}} />
@@ -242,7 +321,23 @@ export default function TenantsPage() {
                   <input type="number" value={newTenant.rate_limit} onChange={e => setNewTenant({...newTenant, rate_limit: parseInt(e.target.value)})} className="form-control bg-transparent border-white-10 text-white py-2" style={{borderRadius: '8px'}} />
                 </div>
               </div>
-              <button type="submit" disabled={isSubmitting} className="btn w-100 py-2 font-bold" style={{backgroundColor: '#00f0ff', color: '#000', borderRadius: '8px'}}>CONFIRMAR REGISTRO</button>
+
+              {isEditing && (
+                <div className="mb-4 d-flex align-items-center gap-2">
+                  <input 
+                    type="checkbox" 
+                    id="is_active"
+                    checked={newTenant.is_active} 
+                    onChange={e => setNewTenant({...newTenant, is_active: e.target.checked})}
+                    className="form-check-input bg-transparent border-white-10"
+                  />
+                  <label htmlFor="is_active" className="kpi-label mb-0 cursor-pointer">Instância Ativa</label>
+                </div>
+              )}
+
+              <button type="submit" disabled={isSubmitting} className="btn w-100 py-2 font-bold" style={{backgroundColor: '#00f0ff', color: '#000', borderRadius: '8px'}}>
+                {isSubmitting ? 'PROCESSANDO...' : (isEditing ? 'SALVAR ALTERAÇÕES' : 'CONFIRMAR REGISTRO')}
+              </button>
             </form>
           </div>
         </div>
