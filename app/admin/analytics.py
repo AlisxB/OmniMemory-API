@@ -4,7 +4,7 @@ Admin API — Analytics & System Monitoring.
 import logging
 from typing import Dict, Any, List
 from fastapi import APIRouter, Depends, Request
-from sqlalchemy import func
+from sqlalchemy import func, text
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 
@@ -117,13 +117,14 @@ async def get_tenant_distribution(
     # Top 5 tenants por mensagens (Requisições) + Tokens
     msg_stmt = (
         select(
-            Message.tenant_id,
+            Session.tenant_id,
             Tenant.name,
             func.count(Message.id).label("msgs"),
             func.sum(Message.tokens_used).label("tokens")
         )
-        .join(Tenant, Message.tenant_id == Tenant.id)
-        .group_by(Message.tenant_id, Tenant.name)
+        .join(Session, Message.session_id == Session.id)
+        .join(Tenant, Session.tenant_id == Tenant.id)
+        .group_by(Session.tenant_id, Tenant.name)
         .order_by(func.count(Message.id).desc())
         .limit(5)
     )
@@ -200,8 +201,15 @@ async def get_recent_activity(
     """
     Retorna os 5 eventos mais recentes (mensagens e memórias) do sistema.
     """
-    # 1. Buscar últimas 5 mensagens
-    msg_stmt = select(Message).order_by(Message.created_at.desc()).limit(5)
+    from sqlalchemy.orm import selectinload
+    
+    # 1. Buscar últimas 5 mensagens com sua sessão para pegar o tenant_id
+    msg_stmt = (
+        select(Message)
+        .options(selectinload(Message.session))
+        .order_by(Message.created_at.desc())
+        .limit(5)
+    )
     messages = (await db.execute(msg_stmt)).scalars().all()
 
     # 2. Buscar últimas 5 memórias
@@ -215,7 +223,7 @@ async def get_recent_activity(
             "id": f"msg_{m.id}",
             "type": "message",
             "title": "Mensagem Processada",
-            "detail": f"Tenant: {m.tenant_id}",
+            "detail": f"Tenant: {m.session.tenant_id if m.session else 'N/A'}",
             "timestamp": m.created_at,
             "icon": "💬"
         })
@@ -240,6 +248,64 @@ async def get_recent_activity(
         final_feed.append(act)
 
     return wrap_response(final_feed, getattr(request.state, "request_id", None))
+
+
+@router.get("/search", summary="Busca semântica administrativa")
+async def admin_semantic_search(
+    request: Request,
+    tenant_id: str,
+    query: str,
+    limit: int = 10,
+    db: AsyncSession = Depends(get_db),
+    _: dict = Depends(get_current_admin),
+):
+    """
+    Busca por similaridade semântica em nível administrativo.
+    Ignora validação de X-API-Key (usado pelo Dashboard).
+    """
+    from ..core.embeddings import EmbeddingService
+    from ..core.security import CryptoManager
+    
+    query_vec = EmbeddingService.get_embedding(query)
+
+    memories = (await db.execute(
+        select(Memory, Memory.embedding.cosine_distance(query_vec).label("distance"))
+        .filter(Memory.tenant_id == tenant_id)
+        .order_by(text("distance"))
+        .limit(limit)
+    )).all()
+
+    # Buscar mensagens relacionadas para contexto completo
+    msg_stmt = (
+        select(Message)
+        .join(Session)
+        .filter(Session.tenant_id == tenant_id)
+        .filter(Message.content.ilike(f"%{query}%"))
+        .limit(5)
+    )
+    messages = (await db.execute(msg_stmt)).scalars().all()
+
+    results = []
+    for m, dist in memories:
+        results.append({
+            "id": m.id,
+            "type": "memory",
+            "content": CryptoManager.decrypt(m.value),
+            "key": m.key,
+            "score": round(1 - dist, 4),
+            "created_at": m.created_at
+        })
+
+    for m in messages:
+        results.append({
+            "id": m.id,
+            "type": "message",
+            "content": m.content,
+            "role": m.role,
+            "created_at": m.created_at
+        })
+
+    return wrap_response(results, getattr(request.state, "request_id", None))
 
 
 @router.get("/tenants/{tenant_id}", summary="Analytics detalhado de um tenant")

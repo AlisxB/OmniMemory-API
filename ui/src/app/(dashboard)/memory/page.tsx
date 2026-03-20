@@ -20,10 +20,10 @@ export default function MemoryExplorerPage() {
   const { data: tenantsData } = useSWR('/admin/api/tenants', fetchApi);
   const tenants = tenantsData?.data || [];
 
-  const handleSearch = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!tenantId || !userId || !query) return;
-    
+  const handleSearch = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!tenantId || !query) return;
+
     setIsSearching(true);
     setFeedback(null);
     try {
@@ -32,13 +32,20 @@ export default function MemoryExplorerPage() {
         query: query,
         limit: '10'
       });
-      const res = await fetchApi(`/v1/context/search?${qs.toString()}`);
-      
-      const memories = res.data?.memories?.map((m: any) => ({ ...m, type: 'memory', display: m.value })) || [];
-      const messages = res.data?.messages?.map((m: any) => ({ ...m, type: 'message', display: m.content })) || [];
-      
-      setSearchResults([...memories, ...messages]);
-      setFeedback({ message: 'Sonda neural concluída com sucesso.', type: 'success' });
+      // Rota administrativa para evitar erros 401 e X-API-Key
+      const res = await fetchApi(`/admin/api/analytics/search?${qs.toString()}`);
+
+      const results = (res.data || []).map((item: any) => ({
+        ...item,
+        display: item.type === 'memory' ? item.content : item.content
+      }));
+
+      setSearchResults(results);
+      if (results.length === 0) {
+        setFeedback({ message: 'Nenhuma correspondência neural encontrada para este padrão.', type: 'error' });
+      } else {
+        setFeedback({ message: 'Sonda neural concluída com sucesso.', type: 'success' });
+      }
     } catch (err: any) {
       console.error(err);
       setFeedback({ message: 'Erro na busca semântica: ' + err.message, type: 'error' });
@@ -46,6 +53,7 @@ export default function MemoryExplorerPage() {
       setIsSearching(false);
     }
   };
+
 
   return (
     <div className="container-fluid p-0 animate-in fade-in duration-700 pb-5">
