@@ -1,11 +1,12 @@
 'use client';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import useSWR, { mutate } from 'swr';
 import { fetchApi } from '@/lib/api';
+import GlassCard from '@/components/GlassCard';
 import { 
   Webhook, Plus, Globe, Shield, Trash2, 
   Activity, Zap, Info, CheckCircle2, AlertTriangle,
-  RefreshCcw, Link2, Key, X
+  RefreshCcw, Link2, Key, X, Clock, Check, AlertCircle
 } from 'lucide-react';
 
 export default function WebhooksPage() {
@@ -14,6 +15,17 @@ export default function WebhooksPage() {
   
   const { data: tenantsData } = useSWR('/admin/api/tenants', fetchApi);
   const tenants = tenantsData?.tenants || [];
+
+  // Polling for queue status (10s)
+  const { data: queueData } = useSWR('/admin/api/analytics/queue-status', fetchApi, {
+    refreshInterval: 10000
+  });
+
+  const queueStatus = queueData?.data || {
+    webhook_queue_size: 0,
+    webhook_processed_count: 0,
+    webhook_failed_count: 0
+  };
 
   const { data: webhooksData, error, isLoading } = useSWR(
     tenantId ? `/admin/api/tenants/${tenantId}/webhooks` : null, 
@@ -49,6 +61,43 @@ export default function WebhooksPage() {
         >
           <Plus size={16} /> NOVA ROTA
         </button>
+      </div>
+
+      {/* QUEUE STATUS KPI ROW */}
+      <div className="row mb-4">
+        <div className="col-md-4">
+          <GlassCard>
+            <div className="kpi-label d-flex align-items-center gap-2">
+              <Clock size={14} className="text-omni-neon" /> FILA PENDENTE
+            </div>
+            <div className="d-flex align-items-baseline">
+              <span className="kpi-value">{queueStatus.webhook_queue_size}</span>
+              <span className="ms-2 text-white-50" style={{fontSize: '0.7rem'}}>Webhooks</span>
+            </div>
+          </GlassCard>
+        </div>
+        <div className="col-md-4">
+          <GlassCard>
+            <div className="kpi-label d-flex align-items-center gap-2">
+              <Check size={14} className="text-omni-accent" /> PROCESSADOS
+            </div>
+            <div className="d-flex align-items-baseline">
+              <span className="kpi-value text-omni-accent">{queueStatus.webhook_processed_count}</span>
+              <span className="ms-2 text-white-50" style={{fontSize: '0.7rem'}}>Total acumulado</span>
+            </div>
+          </GlassCard>
+        </div>
+        <div className="col-md-4">
+          <GlassCard>
+            <div className="kpi-label d-flex align-items-center gap-2">
+              <AlertCircle size={14} className="text-danger" /> FALHAS
+            </div>
+            <div className="d-flex align-items-baseline">
+              <span className="kpi-value text-danger">{queueStatus.webhook_failed_count}</span>
+              <span className="ms-2 text-white-50" style={{fontSize: '0.7rem'}}>Requer atenção</span>
+            </div>
+          </GlassCard>
+        </div>
       </div>
 
       {/* FILTER ROW */}
