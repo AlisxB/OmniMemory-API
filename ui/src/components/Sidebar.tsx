@@ -15,8 +15,9 @@ export default function Sidebar({ isPinned, onTogglePin, onHoverChange }: Sideba
   const pathname = usePathname();
 
   const isActive = (path: string) => {
-    if (path === '/') return pathname === '/';
-    return pathname?.startsWith(path);
+    if (path === '/' && pathname === '/') return true;
+    if (path !== '/' && pathname.startsWith(path)) return true;
+    return false;
   };
 
   return (
@@ -44,19 +45,19 @@ export default function Sidebar({ isPinned, onTogglePin, onHoverChange }: Sideba
       </div>
 
       <nav className="d-flex flex-column px-2 mt-3 gap-2">
-        <Link href="/" className={`sidebar-link d-flex align-items-center gap-3 ${isActive('/') ? 'active' : ''}`}>
+        <Link href="/" className={`sidebar-link ${isActive('/') ? 'active' : ''} d-flex align-items-center gap-3`}>
           <div className="sidebar-icon-wrapper"><LayoutDashboard size={20} /></div>
           <span className="sidebar-text-content">Visão Geral</span>
         </Link>
-        <Link href="/tenants" className={`sidebar-link d-flex align-items-center gap-3 ${isActive('/tenants') ? 'active' : ''}`}>
+        <Link href="/tenants" className={`sidebar-link ${isActive('/tenants') ? 'active' : ''} d-flex align-items-center gap-3`}>
           <div className="sidebar-icon-wrapper"><Users size={20} /></div>
           <span className="sidebar-text-content">Tenants</span>
         </Link>
-        <Link href="/memory" className={`sidebar-link d-flex align-items-center gap-3 ${isActive('/memory') ? 'active' : ''}`}>
+        <Link href="/memory" className={`sidebar-link ${isActive('/memory') ? 'active' : ''} d-flex align-items-center gap-3`}>
           <div className="sidebar-icon-wrapper"><BrainCircuit size={20} /></div>
           <span className="sidebar-text-content">Memória</span>
         </Link>
-        <Link href="/webhooks" className={`sidebar-link d-flex align-items-center gap-3 ${isActive('/webhooks') ? 'active' : ''}`}>
+        <Link href="/webhooks" className={`sidebar-link ${isActive('/webhooks') ? 'active' : ''} d-flex align-items-center gap-3`}>
           <div className="sidebar-icon-wrapper"><Webhook size={20} /></div>
           <span className="sidebar-text-content">Webhooks</span>
         </Link>
