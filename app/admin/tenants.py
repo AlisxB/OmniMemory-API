@@ -102,6 +102,10 @@ async def list_tenants(
             "is_active": t.is_active,
             "created_at": t.created_at,
             "subscription_expires_at": t.subscription_expires_at,
+            "settings": {
+                "buffer_window_seconds": t.settings.buffer_window_seconds if t.settings else 60,
+                "rate_limit_rpm": t.settings.rate_limit_rpm if t.settings else 100,
+            } if t.settings else {"buffer_window_seconds": 60, "rate_limit_rpm": 100},
             "usage": usage, # Hoje (Redis)
             "total_usage": {
                 "tokens": int(db_stats.tokens or 0) if db_stats else 0,
@@ -214,7 +218,11 @@ async def update_tenant(
         if field in updates:
             setattr(tenant, field, updates[field])
 
-    if "settings" in updates and tenant.settings:
+    if "settings" in updates:
+        if not tenant.settings:
+            tenant.settings = TenantSettings(tenant_id=tenant_id)
+            db.add(tenant.settings)
+            
         for field in ("rate_limit_rpm", "daily_token_limit", "buffer_window_seconds"):
             if field in updates["settings"]:
                 setattr(tenant.settings, field, updates["settings"][field])
