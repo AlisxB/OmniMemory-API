@@ -11,6 +11,7 @@ from sqlalchemy.future import select
 from ..database import get_db
 from ..core.responses import wrap_response
 from ..redis import RedisManager
+from ..domain.sessions.model import Session, SessionStatus
 from ..domain.tenants.model import Tenant
 from ..domain.users.model import User
 from ..domain.messages.model import Message
@@ -34,6 +35,16 @@ async def get_system_stats(
     total_users = (await db.execute(select(func.count(User.id)))).scalar_one()
     total_messages = (await db.execute(select(func.count(Message.id)))).scalar_one()
     total_memories = (await db.execute(select(func.count(Memory.id)))).scalar_one()
+    
+    # Sessões Ativas
+    active_sessions = (await db.execute(
+        select(func.count(Session.id)).filter(Session.status == SessionStatus.active)
+    )).scalar_one()
+
+    # Total de Tokens (Soma de todas as mensagens)
+    total_tokens = (await db.execute(
+        select(func.sum(Message.tokens_used))
+    )).scalar_one() or 0
 
     return wrap_response(
         {
@@ -41,6 +52,8 @@ async def get_system_stats(
             "total_users": total_users,
             "total_messages": total_messages,
             "total_memories": total_memories,
+            "active_sessions": active_sessions,
+            "total_tokens": int(total_tokens),
         },
         getattr(request.state, "request_id", None),
     )
