@@ -14,28 +14,34 @@ export default function MemoryExplorerPage() {
   const [query, setQuery] = useState('');
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const [isSearching, setIsSearching] = useState(false);
+  const [feedback, setFeedback] = useState<{message: string, type: 'success' | 'error'} | null>(null);
 
   // Busca lista de tenants para o select
   const { data: tenantsData } = useSWR('/admin/api/tenants', fetchApi);
-  const tenants = tenantsData?.tenants || [];
+  const tenants = tenantsData?.data || [];
 
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!tenantId || !userId || !query) return;
     
     setIsSearching(true);
+    setFeedback(null);
     try {
       const qs = new URLSearchParams({
         tenant_id: tenantId,
-        external_user_id: userId,
         query: query,
-        limit: '6'
+        limit: '10'
       });
       const res = await fetchApi(`/v1/context/search?${qs.toString()}`);
-      setSearchResults(res.data || []);
+      
+      const memories = res.data?.memories?.map((m: any) => ({ ...m, type: 'memory', display: m.value })) || [];
+      const messages = res.data?.messages?.map((m: any) => ({ ...m, type: 'message', display: m.content })) || [];
+      
+      setSearchResults([...memories, ...messages]);
+      setFeedback({ message: 'Sonda neural concluída com sucesso.', type: 'success' });
     } catch (err: any) {
       console.error(err);
-      alert('Erro na busca semântica: ' + err.message);
+      setFeedback({ message: 'Erro na busca semântica: ' + err.message, type: 'error' });
     } finally {
       setIsSearching(false);
     }
@@ -56,6 +62,12 @@ export default function MemoryExplorerPage() {
         </div>
       </div>
 
+      {feedback && (
+        <div className={`alert ${feedback.type === 'success' ? 'alert-success bg-success bg-opacity-10 border-success' : 'alert-danger bg-danger bg-opacity-10 border-danger'} text-white mb-4 animate-in slide-in-from-top duration-300`} style={{fontSize: '0.8rem', borderRadius: '8px'}}>
+          {feedback.message}
+        </div>
+      )}
+
       <div className="row">
         {/* PAINEL DE PARÂMETROS */}
         <div className="col-lg-4">
@@ -73,7 +85,7 @@ export default function MemoryExplorerPage() {
                 >
                   <option value="" className="bg-black">Selecione o Cliente</option>
                   {tenants.map((t: any) => (
-                    <option key={t.tenant_id} value={t.tenant_id} className="bg-black">{t.name}</option>
+                    <option key={t.id} value={t.id} className="bg-black">{t.name}</option>
                   ))}
                 </select>
               </div>
@@ -154,18 +166,22 @@ export default function MemoryExplorerPage() {
                 <div key={i} className="col-md-6 col-xl-4">
                   <div className="glass-panel p-3 border-white-10 h-100 d-flex flex-column justify-content-between position-relative" style={{background: 'rgba(255,255,255,0.02) !important'}}>
                     <div className="position-absolute top-0 end-0 p-2">
-                       <span className="badge border border-omni-neon border-opacity-20 text-omni-neon" style={{fontSize: '0.6rem', background: 'rgba(0,240,255,0.05)'}}>
-                         {(mem.score * 100).toFixed(0)}% MATCH
+                       <span className="badge border border-omni-purple border-opacity-20 text-omni-purple" style={{fontSize: '0.6rem', background: 'rgba(179,0,255,0.05)'}}>
+                         SEMANTIC MATCH
                        </span>
                     </div>
                     
                     <div className="mb-3">
-                      <div className="kpi-label mb-2" style={{fontSize: '0.6rem', color: '#b300ff'}}>Fato Neural</div>
-                      <p className="text-white-50 mb-0" style={{fontSize: '0.75rem', lineHeight: 1.5}}>{mem.value}</p>
+                      <div className="kpi-label mb-2" style={{fontSize: '0.6rem', color: mem.type === 'memory' ? '#b300ff' : '#00f0ff'}}>
+                        {mem.type === 'memory' ? 'Fato Neural (Memória)' : 'Mensagem Histórica'}
+                      </div>
+                      <p className="text-white-50 mb-0" style={{fontSize: '0.75rem', lineHeight: 1.5}}>{mem.display}</p>
                     </div>
 
                     <div className="pt-2 border-top border-white-5 d-flex justify-content-between align-items-center">
-                      <code style={{fontSize: '0.6rem', color: 'rgba(255,255,255,0.2)'}}>ID:{mem.key.slice(0,6)}</code>
+                      <code style={{fontSize: '0.6rem', color: 'rgba(255,255,255,0.2)'}}>
+                        {mem.type === 'memory' ? `KEY:${mem.key.slice(0,8)}` : `ROLE:${mem.role}`}
+                      </code>
                       <ArrowRight size={10} className="text-white-50" />
                     </div>
                   </div>
