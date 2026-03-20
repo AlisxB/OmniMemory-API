@@ -10,6 +10,8 @@ import {
 
 export default function TenantsPage() {
   const { data: rawData, error, isLoading } = useSWR('/admin/api/tenants', fetchApi, { refreshInterval: 10000 });
+  const { data: statsData } = useSWR('/admin/api/analytics/system-stats', fetchApi, { refreshInterval: 15000 });
+  
   const [searchTerm, setSearchTerm] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [rotatedKey, setRotatedKey] = useState<string | null>(null);
@@ -25,14 +27,23 @@ export default function TenantsPage() {
     is_active: true
   });
 
+  const formatNumber = (num: number) => {
+    if (num === undefined || num === null) return '0';
+    if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
+    if (num >= 1000) return (num / 1000).toFixed(1) + 'K';
+    return num.toString();
+  };
+
   if (isLoading) return <div className="text-omni-neon animate-pulse text-lg p-5 font-mono">📡 Sincronizando com a malha central...</div>;
   if (error) return <div className="text-omni-accent font-mono p-5">🚨 Falha na comunicação: {error.message}</div>;
 
   const tenants = rawData?.data || [];
+  const systemStats = statsData?.data || { total_tenants: 0, active_sessions: 0, total_tokens: 0 };
+
   const stats = {
-    total: tenants.length,
-    active: tenants.filter((t: any) => t.is_active).length,
-    totalTokens: tenants.reduce((acc: number, t: any) => acc + (t.total_usage?.tokens || 0), 0)
+    total: systemStats.total_tenants || tenants.length,
+    activeSessions: systemStats.active_sessions || 0,
+    totalTokens: systemStats.total_tokens || 0
   };
 
   const filtered = tenants.filter((t: any) => 
@@ -189,10 +200,10 @@ export default function TenantsPage() {
         </div>
         <div className="col-md-4">
           <div className="glass-panel h-100">
-            <div className="kpi-label">INSTÂNCIAS ATIVAS</div>
+            <div className="kpi-label">SESSÕES ATIVAS</div>
             <div className="d-flex align-items-baseline">
-              <span className="kpi-value text-success">{stats.active}</span>
-              <span className="kpi-perc">+0%</span>
+              <span className="kpi-value text-omni-neon">{stats.activeSessions}</span>
+              <span className="kpi-perc text-white-50 ms-2" style={{fontSize: '0.7rem'}}>Live</span>
             </div>
           </div>
         </div>
@@ -200,7 +211,7 @@ export default function TenantsPage() {
           <div className="glass-panel h-100">
             <div className="kpi-label">CONSUMO TOTAL (TOKENS)</div>
             <div className="d-flex align-items-baseline">
-              <span className="kpi-value" style={{fontSize: '1.8rem'}}>{(stats.totalTokens / 1000).toFixed(1)}k</span>
+              <span className="kpi-value" style={{fontSize: '1.8rem'}}>{formatNumber(stats.totalTokens)}</span>
               <span className="ms-2 text-white-50" style={{fontSize: '0.8rem'}}>TKS</span>
             </div>
           </div>
