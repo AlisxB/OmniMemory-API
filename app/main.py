@@ -47,7 +47,7 @@ tags_metadata = [
     },
     {
         "name": "admin",
-        "description": "Operações administrativas globais e acesso ao Dashboard.",
+        "description": "Operações administrativas globais.",
     },
     {
         "name": "admin — auth",
@@ -133,12 +133,6 @@ def create_app() -> FastAPI:
         openapi_tags=tags_metadata,
         swagger_ui_parameters={"persistAuthorization": True},
     )
-
-    # ── Static Files ────────────────────────────────────────────────────────
-    from pathlib import Path as _Path
-    _static_dir = _Path(__file__).parent / "static"
-    if _static_dir.exists():
-        app.mount("/static", StaticFiles(directory=str(_static_dir)), name="static")
 
     # ── Middlewares (ordem importa!) ────────────────────────────────────────
     # 1. CORS (deve ser o mais externo)
