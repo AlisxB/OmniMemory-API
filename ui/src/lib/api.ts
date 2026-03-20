@@ -20,7 +20,7 @@ export async function fetchApi(endpoint: string, options: RequestInit = {}) {
   const response = await fetch(`${API_BASE}${endpoint}`, config);
 
   if (!response.ok) {
-    if (response.status === 401 && typeof window !== 'undefined') {
+    if (response.status === 401 && endpoint.startsWith('/admin') && typeof window !== 'undefined') {
       localStorage.removeItem('omni_admin_token');
       window.location.href = '/login';
     }

@@ -144,13 +144,14 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
 
-    # 2. Rate Limit global (proteção antes de qualquer processamento)
-    app.add_middleware(
-        RateLimitMiddleware,
-        global_limit=settings.global_rate_limit_rpm,
-        admin_limit=settings.admin_rate_limit_rpm,
-        window_seconds=60,
-    )
+    # 2. Rate Limit global (apenas em produção/homologação)
+    if not settings.is_development:
+        app.add_middleware(
+            RateLimitMiddleware,
+            global_limit=settings.global_rate_limit_rpm,
+            admin_limit=settings.admin_rate_limit_rpm,
+            window_seconds=60,
+        )
 
     # 3. Request ID (tracing)
     app.add_middleware(RequestIDMiddleware)

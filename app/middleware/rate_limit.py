@@ -69,8 +69,9 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             return True, count + 1, 0
 
     async def dispatch(self, request: Request, call_next):
-        # Excluir endpoints de observabilidade
-        if request.url.path in ("/health", "/", "/metrics"):
+        # Excluir endpoints de observabilidade e desativar em dev (opcional)
+        from ..config import settings
+        if request.url.path in ("/health", "/", "/metrics") or settings.environment == "development":
             return await call_next(request)
 
         ip = self._get_client_ip(request)
@@ -81,7 +82,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         allowed, count, retry_after = self._check_limit(key, limit)
 
         if not allowed:
-            logger.warning(f"Rate limit exceeded | ip={ip} path={request.url.path}")
+            logger.warning(f"Rate limit exceeded | ip={ip} path={request.url.path} limit={limit} current={count}")
             return JSONResponse(
                 status_code=429,
                 content={
