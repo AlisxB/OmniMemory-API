@@ -232,6 +232,9 @@ async def post_message(
     db: AsyncSession = Depends(get_db),
 ):
     """Salva uma mensagem na sessão ativa. Dispara webhooks e buffer inteligente."""
+    if req.tenant_id:
+        await validate_tenant_access(req.tenant_id, request.headers.get("X-API-Key"), db)
+    
     session = None
 
     if req.session_id:
